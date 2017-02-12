@@ -11,15 +11,14 @@
 #include <netdb.h>
 #include <unistd.h>
 
-#define internal static
 #define local_persist static
 
-internal int DaemonSockFD;
-internal bool IsRunning;
-internal pthread_t Thread;
-internal daemon_callback *ConnectionCallback;
+static int DaemonSockFD;
+static bool IsRunning;
+static pthread_t Thread;
+static daemon_callback *ConnectionCallback;
 
-internal char *
+static char *
 ReadFromSocket(int SockFD)
 {
     int Length = 256;
@@ -39,20 +38,20 @@ ReadFromSocket(int SockFD)
     return Result;
 }
 
-internal void
+static void
 WriteToSocket(const char *Message, int SockFD)
 {
     send(SockFD, Message, strlen(Message), 0);
 }
 
-internal void
+static void
 CloseSocket(int SockFD)
 {
     shutdown(SockFD, SHUT_RDWR);
     close(SockFD);
 }
 
-internal void *
+static void *
 HandleConnection(void *Unused)
 {
     while(IsRunning)

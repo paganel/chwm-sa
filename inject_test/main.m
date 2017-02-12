@@ -27,7 +27,7 @@
         const char *Name = [[Application localizedName] UTF8String];
         if(Name)
         {
-            if(strcmp(Name, "iTerm2") == 0)
+            if(strcmp(Name, "Dock") == 0)
             {
                 printf("process found\n");
 
