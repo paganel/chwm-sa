@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>CHWMInjector</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.koekeishiya.CHWMInjector</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>CHWMInjector</string>
+	<key>CFBundlePackageType</key>
+	<string>osax</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2017 Åsmund Vikane. All rights reserved.</string>
+	<key>OSAScriptingDefinition</key>
+	<string>CHWMInjector.sdef</string>
+	<key>OSAXHandlers</key>
+	<dict>
+		<key>Events</key>
+		<dict>
+			<key>CHWMinjc</key>
+			<dict>
+				<key>Context</key>
+				<string>Process</string>
+				<key>Handler</key>
+				<string>CHWMhandleInject</string>
+				<key>ThreadSafe</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
+</dict>
+</plist>
