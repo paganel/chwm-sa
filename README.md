@@ -18,5 +18,4 @@ Copy the generated `CHWMInjector.osax` to `/Library/ScriptingAdditions/`.
 
 Build and run `inject_test` to load the scripting addition bundle into an application.
 
-    - Hardcoded to iTerm2 for testing purposes.
-
+`inject_test` is currently hardcoded to 'Dock' for testing purposes.
