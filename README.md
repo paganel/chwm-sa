@@ -36,4 +36,5 @@ Build and run `inject_test` to load the scripting addition bundle into the Dock.
 The Dock will now spawn a local unix domain socket and starts listening on port `5050`.
 
 To set window alpha, send: `window_alpha <cgwindowid> <alpha>`
+
 To set window level, send: `window_level <cgwindowid> <kCGWindowLevelKey>`
