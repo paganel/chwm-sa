@@ -3,7 +3,7 @@
 **WARNING**: Use at your own discretion. I take no responsibility if anything should happen to your
 machine while testing or otherwise trying to intsall this extension.
 
-I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6) with the below instructions.
+I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6) and Sierra (10.12.3) with the below instructions.
 
 CHWMInjector.osax is our scripting addition.
 
