@@ -17,10 +17,13 @@
 @end
 
 typedef int CGSConnectionID;
-extern "C" CGSConnectionID _CGSDefaultConnection(void);
+extern "C" CGSConnectionID CGSMainConnectionID(void);
 extern "C" CGError CGSSetWindowAlpha(CGSConnectionID Connection, uint32_t WindowId, float Alpha);
 extern "C" CGError CGSSetWindowLevel(CGSConnectionID Connection, uint32_t WindowId, int Level);
-extern "C" CGError CGSGetScreenRectForWindow(CGSConnectionID Connection, uint32_t WindowId, CGRect *Rect);
+
+#define kCGSOnAllWorkspacesTagBit (1 << 11)
+extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
+extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 
 static CGSConnectionID _Connection;
 
@@ -108,13 +111,38 @@ DAEMON_CALLBACK(DaemonCallback)
         NSLog(@"window_level id: '%d', level: '%d'", WindowId, WindowLevel);
         CGSSetWindowLevel(_Connection, WindowId, WindowLevel);
     }
+    else if(Tokens[0] == "window_sticky")
+    {
+        uint32_t WindowId = 0;
+        if(Tokens.size() > 1)
+        {
+            sscanf(Tokens[1].c_str(), "%d", &WindowId);
+        }
+
+        int Value = 0;
+        if(Tokens.size() > 2)
+        {
+            sscanf(Tokens[2].c_str(), "%d", &Value);
+        }
+
+        int Tags[2] = {0};
+        Tags[0] |= kCGSOnAllWorkspacesTagBit;
+        if(Value == 1)
+        {
+            CGSSetWindowTags(_Connection, WindowId, Tags, 32);
+        }
+        else
+        {
+            CGSClearWindowTags(_Connection, WindowId, Tags, 32);
+        }
+    }
 }
 
 @implementation Payload
 + (void) load
 {
     NSLog(@"Loaded Payload into: %d, uid: %d, euid: %d", getpid(), getuid(), geteuid());
-    _Connection = _CGSDefaultConnection();
+    _Connection = CGSMainConnectionID();
 
     int Port = 5050;
     StartDaemon(Port, DaemonCallback);

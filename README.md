@@ -1,7 +1,7 @@
 ## Description
 
 **WARNING**: Use at your own discretion. I take no responsibility if anything should happen to your
-machine while testing or otherwise trying to intsall this extension.
+machine while testing or otherwise trying to install this extension.
 
 I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6) and Sierra (10.12.3) with the below instructions.
 
@@ -38,3 +38,5 @@ The Dock will now spawn a local unix domain socket and starts listening on port 
 To set window alpha, send: `window_alpha <cgwindowid> <alpha>`
 
 To set window level, send: `window_level <cgwindowid> <kCGWindowLevelKey>`
+
+To set window sticky (show on all spaces), send: `window_sticky <cgwindowid> <1 | 0>`
