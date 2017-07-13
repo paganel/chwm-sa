@@ -19,6 +19,7 @@
 typedef int CGSConnectionID;
 extern "C" CGSConnectionID CGSMainConnectionID(void);
 extern "C" CGError CGSSetWindowAlpha(CGSConnectionID Connection, uint32_t WindowId, float Alpha);
+extern "C" CGError CGSSetWindowListAlpha(CGSConnectionID Connection, const uint32_t *WindowList, int WindowCount, float Alpha, float Duration);
 extern "C" CGError CGSSetWindowLevel(CGSConnectionID Connection, uint32_t WindowId, int Level);
 
 #define kCGSOnAllWorkspacesTagBit (1 << 11)
@@ -64,6 +65,28 @@ DAEMON_CALLBACK(DaemonCallback)
 
         NSLog(@"window_alpha id: '%d', alpha: '%f'", WindowId, WindowAlpha);
         CGSSetWindowAlpha(_Connection, WindowId, WindowAlpha);
+    }
+    else if(Tokens[0] == "window_alpha_fade")
+    {
+        uint32_t WindowId = 0;
+        if(Tokens.size() > 1)
+        {
+            sscanf(Tokens[1].c_str(), "%d", &WindowId);
+        }
+
+        float WindowAlpha = 1.0f;
+        if(Tokens.size() > 2)
+        {
+            sscanf(Tokens[2].c_str(), "%f", &WindowAlpha);
+        }
+
+        float Duration = 0.5f;
+        if(Tokens.size() > 3)
+        {
+            sscanf(Tokens[3].c_str(), "%f", &Duration);
+        }
+
+        CGSSetWindowListAlpha(_Connection, &WindowId, 1, WindowAlpha, Duration);
     }
     else if(Tokens[0] == "window_level")
     {

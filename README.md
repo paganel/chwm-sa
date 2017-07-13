@@ -37,6 +37,8 @@ The Dock will now spawn a local unix domain socket and starts listening on port 
 
 To set window alpha, send: `window_alpha <cgwindowid> <alpha>`
 
+To fade into window alpha, send: `window_alpha_fade <cgwindowid> <alpha> <duration>`
+
 To set window level, send: `window_level <cgwindowid> <kCGWindowLevelKey>`
 
 To set window sticky (show on all spaces), send: `window_sticky <cgwindowid> <1 | 0>`
