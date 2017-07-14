@@ -18,6 +18,7 @@
 
 typedef int CGSConnectionID;
 extern "C" CGSConnectionID CGSMainConnectionID(void);
+extern "C" OSStatus CGSGetSharedWindow(const int cid, const uint32_t wid, int one, int zero);
 extern "C" CGError CGSSetWindowAlpha(CGSConnectionID Connection, uint32_t WindowId, float Alpha);
 extern "C" CGError CGSSetWindowListAlpha(CGSConnectionID Connection, const uint32_t *WindowList, int WindowCount, float Alpha, float Duration);
 extern "C" CGError CGSSetWindowLevel(CGSConnectionID Connection, uint32_t WindowId, int Level);
@@ -25,6 +26,7 @@ extern "C" CGError CGSSetWindowLevel(CGSConnectionID Connection, uint32_t Window
 #define kCGSOnAllWorkspacesTagBit (1 << 11)
 extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
+
 
 static CGSConnectionID _Connection;
 
@@ -43,8 +45,6 @@ SplitString(char *Line, char Delim)
 
 DAEMON_CALLBACK(DaemonCallback)
 {
-    NSLog(@"daemon: '%s'", Message);
-
     char *Temp = strdup(Message);
     std::vector<std::string> Tokens = SplitString(Temp, ' ');
     free(Temp);
@@ -63,7 +63,6 @@ DAEMON_CALLBACK(DaemonCallback)
             sscanf(Tokens[2].c_str(), "%f", &WindowAlpha);
         }
 
-        NSLog(@"window_alpha id: '%d', alpha: '%f'", WindowId, WindowAlpha);
         CGSSetWindowAlpha(_Connection, WindowId, WindowAlpha);
     }
     else if(Tokens[0] == "window_alpha_fade")
@@ -131,7 +130,6 @@ DAEMON_CALLBACK(DaemonCallback)
             WindowLevel = CGWindowLevelForKey(WindowLevelKey);
         }
 
-        NSLog(@"window_level id: '%d', level: '%d'", WindowId, WindowLevel);
         CGSSetWindowLevel(_Connection, WindowId, WindowLevel);
     }
     else if(Tokens[0] == "window_sticky")
