@@ -42,3 +42,5 @@ To fade into window alpha, send: `window_alpha_fade <cgwindowid> <alpha> <durati
 To set window level, send: `window_level <cgwindowid> <kCGWindowLevelKey>`
 
 To set window sticky (show on all spaces), send: `window_sticky <cgwindowid> <1 | 0>`
+
+To set window position, send: `window_move <cgwindowid> <x> <y>`

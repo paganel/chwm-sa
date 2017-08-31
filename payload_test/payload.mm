@@ -18,15 +18,14 @@
 
 typedef int CGSConnectionID;
 extern "C" CGSConnectionID CGSMainConnectionID(void);
-extern "C" OSStatus CGSGetSharedWindow(const int cid, const uint32_t wid, int one, int zero);
 extern "C" CGError CGSSetWindowAlpha(CGSConnectionID Connection, uint32_t WindowId, float Alpha);
 extern "C" CGError CGSSetWindowListAlpha(CGSConnectionID Connection, const uint32_t *WindowList, int WindowCount, float Alpha, float Duration);
 extern "C" CGError CGSSetWindowLevel(CGSConnectionID Connection, uint32_t WindowId, int Level);
+extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
 
 #define kCGSOnAllWorkspacesTagBit (1 << 11)
 extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
-
 
 static CGSConnectionID _Connection;
 
@@ -49,51 +48,45 @@ DAEMON_CALLBACK(DaemonCallback)
     std::vector<std::string> Tokens = SplitString(Temp, ' ');
     free(Temp);
 
-    if(Tokens[0] == "window_alpha")
+    // NOTE(koekeishiya): interaction is supposed to happen through an
+    // external program (chunkwm), and so we do not bother doing input
+    // validation, as the program in question should do this.
+
+    if(Tokens[0] == "window_move")
     {
         uint32_t WindowId = 0;
-        if(Tokens.size() > 1)
-        {
-            sscanf(Tokens[1].c_str(), "%d", &WindowId);
-        }
+        int X = 0;
+        int Y = 0;
 
+        sscanf(Tokens[1].c_str(), "%d", &WindowId);
+        sscanf(Tokens[2].c_str(), "%d", &X);
+        sscanf(Tokens[3].c_str(), "%d", &Y);
+
+        CGPoint Point = CGPointMake(X, Y);
+        CGSMoveWindow(_Connection, WindowId, &Point);
+    }
+    else if(Tokens[0] == "window_alpha")
+    {
+        uint32_t WindowId = 0;
+        sscanf(Tokens[1].c_str(), "%d", &WindowId);
         float WindowAlpha = 1.0f;
-        if(Tokens.size() > 2)
-        {
-            sscanf(Tokens[2].c_str(), "%f", &WindowAlpha);
-        }
-
+        sscanf(Tokens[2].c_str(), "%f", &WindowAlpha);
         CGSSetWindowAlpha(_Connection, WindowId, WindowAlpha);
     }
     else if(Tokens[0] == "window_alpha_fade")
     {
         uint32_t WindowId = 0;
-        if(Tokens.size() > 1)
-        {
-            sscanf(Tokens[1].c_str(), "%d", &WindowId);
-        }
-
+        sscanf(Tokens[1].c_str(), "%d", &WindowId);
         float WindowAlpha = 1.0f;
-        if(Tokens.size() > 2)
-        {
-            sscanf(Tokens[2].c_str(), "%f", &WindowAlpha);
-        }
-
+        sscanf(Tokens[2].c_str(), "%f", &WindowAlpha);
         float Duration = 0.5f;
-        if(Tokens.size() > 3)
-        {
-            sscanf(Tokens[3].c_str(), "%f", &Duration);
-        }
-
+        sscanf(Tokens[3].c_str(), "%f", &Duration);
         CGSSetWindowListAlpha(_Connection, &WindowId, 1, WindowAlpha, Duration);
     }
     else if(Tokens[0] == "window_level")
     {
         uint32_t WindowId = 0;
-        if(Tokens.size() > 1)
-        {
-            sscanf(Tokens[1].c_str(), "%d", &WindowId);
-        }
+        sscanf(Tokens[1].c_str(), "%d", &WindowId);
 
         /*
         enum _CGCommonWindowLevelKey
@@ -122,30 +115,19 @@ DAEMON_CALLBACK(DaemonCallback)
             kCGNumberOfWindowLevelKeys
         }; typedef int32_t CGWindowLevelKey;
         */
-        int WindowLevel = 0;
-        if(Tokens.size() > 2)
-        {
-            int WindowLevelKey;
-            sscanf(Tokens[2].c_str(), "%d", &WindowLevelKey);
-            WindowLevel = CGWindowLevelForKey(WindowLevelKey);
-        }
 
+        int WindowLevel = 0;
+        int WindowLevelKey;
+        sscanf(Tokens[2].c_str(), "%d", &WindowLevelKey);
+        WindowLevel = CGWindowLevelForKey(WindowLevelKey);
         CGSSetWindowLevel(_Connection, WindowId, WindowLevel);
     }
     else if(Tokens[0] == "window_sticky")
     {
         uint32_t WindowId = 0;
-        if(Tokens.size() > 1)
-        {
-            sscanf(Tokens[1].c_str(), "%d", &WindowId);
-        }
-
+        sscanf(Tokens[1].c_str(), "%d", &WindowId);
         int Value = 0;
-        if(Tokens.size() > 2)
-        {
-            sscanf(Tokens[2].c_str(), "%d", &Value);
-        }
-
+        sscanf(Tokens[2].c_str(), "%d", &Value);
         int Tags[2] = {0};
         Tags[0] |= kCGSOnAllWorkspacesTagBit;
         if(Value == 1)
