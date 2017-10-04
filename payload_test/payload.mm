@@ -19,11 +19,13 @@
 typedef int CGSConnectionID;
 extern "C" CGSConnectionID CGSMainConnectionID(void);
 extern "C" CGError CGSSetWindowAlpha(CGSConnectionID Connection, uint32_t WindowId, float Alpha);
+extern "C" CGError CGSGetWindowAlpha(CGSConnectionID Connection, uint32_t WindowId, float *outAlpha);
 extern "C" CGError CGSSetWindowListAlpha(CGSConnectionID Connection, const uint32_t *WindowList, int WindowCount, float Alpha, float Duration);
 extern "C" CGError CGSSetWindowLevel(CGSConnectionID Connection, uint32_t WindowId, int Level);
 extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
 
 #define kCGSOnAllWorkspacesTagBit (1 << 11)
+#define kCGSNoShadowTagBit (1 << 3)
 extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 
@@ -138,6 +140,37 @@ DAEMON_CALLBACK(DaemonCallback)
         {
             CGSClearWindowTags(_Connection, WindowId, Tags, 32);
         }
+    }
+    else if(Tokens[0] == "window_shadow")
+    {
+        uint32_t WindowId = 0;
+        sscanf(Tokens[1].c_str(), "%d", &WindowId);
+        int Value = 0;
+        sscanf(Tokens[2].c_str(), "%d", &Value);
+        int Tags[2] = {0};
+
+        NSWindow * ns_window;
+        ns_window = [NSApp windowWithWindowNumber: WindowId];
+        
+        Tags[0] |= kCGSNoShadowTagBit;
+        if(Value == 1)
+        {
+            CGSClearWindowTags(_Connection, WindowId, Tags, 32);
+        }
+        else
+        {
+            CGSSetWindowTags(_Connection, WindowId, Tags, 32);
+        }
+
+        /* 
+          The restoring of the shadow doesn't get drawn until the window
+          is either moved, focused or otherwise altered. We slightly flip 
+          the alpha state to trigger a redrawing after changing the flag.
+        */
+        float OriginalAlpha = 0.0f;
+        CGSGetWindowAlpha(_Connection, WindowId, &OriginalAlpha);
+        CGSSetWindowAlpha(_Connection, WindowId, OriginalAlpha - 0.1f);
+        CGSSetWindowAlpha(_Connection, WindowId, OriginalAlpha);
     }
 }
 
