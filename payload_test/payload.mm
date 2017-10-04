@@ -149,9 +149,6 @@ DAEMON_CALLBACK(DaemonCallback)
         sscanf(Tokens[2].c_str(), "%d", &Value);
         int Tags[2] = {0};
 
-        NSWindow * ns_window;
-        ns_window = [NSApp windowWithWindowNumber: WindowId];
-        
         Tags[0] |= kCGSNoShadowTagBit;
         if(Value == 1)
         {
