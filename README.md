@@ -3,7 +3,7 @@
 **WARNING**: Use at your own discretion. I take no responsibility if anything should happen to your
 machine while testing or otherwise trying to install this extension.
 
-I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6) and Sierra (10.12.3) with the below instructions.
+I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6), Sierra (10.12.6) and High Sierra (10.13.0) with the below instructions.
 
 CHWMInjector.osax is our scripting addition.
 
@@ -44,3 +44,5 @@ To set window level, send: `window_level <cgwindowid> <kCGWindowLevelKey>`
 To set window sticky (show on all spaces), send: `window_sticky <cgwindowid> <1 | 0>`
 
 To set window position, send: `window_move <cgwindowid> <x> <y>`
+
+To set window shadow, send: `window_shadow <cgwindowid> <1 | 0>`
