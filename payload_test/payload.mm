@@ -372,11 +372,15 @@ static void init_instances()
 
     uint64_t ds_instance_addr = baseaddr + 0xe10;
     ds_instance_addr = hex_find_seq(ds_instance_addr, ds_c_pattern);
-    uint32_t offset = *(int32_t *)ds_instance_addr;
-    // NSLog(@"ds location = 0x%llX", ds_instance_addr + offset + 0x4);
-
-    ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
-    [ds_instance retain];
+    if (ds_instance_addr == 0) {
+        NSLog(@"[chwm-sa] Failed to get pointer to Dock.Spaces! Space-switching will not work..");
+        ds_instance = nil;
+    } else {
+        uint32_t offset = *(int32_t *)ds_instance_addr;
+        NSLog(@"[chwm-sa]Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
+        ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
+        [ds_instance retain];
+    }
 
     /*
     Class ds_class = [ds_instance class];
