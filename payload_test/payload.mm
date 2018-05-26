@@ -246,7 +246,7 @@ DAEMON_CALLBACK(DaemonCallback)
                     dest_space = space;
                     break;
                 }
-                NSLog(@"dock.spaces allspaces: %lld", sid);
+                // NSLog(@"dock.spaces allspaces: %lld", sid);
             }
 
             NSArray *displayspaces = (NSArray*) my_get_ivar(ds_instance, "_displaySpaces");
@@ -260,7 +260,7 @@ DAEMON_CALLBACK(DaemonCallback)
                     CGSHideSpaces(_connection, (__bridge CFArrayRef)NSSSpace);
                     CGSManagedDisplaySetCurrentSpace(_connection, dest_display, space_id);
                     my_set_ivar(dspace, "_currentSpace", dest_space);
-                    NSLog(@"dock.displayspaces space: %lld", space_id);
+                    // NSLog(@"dock.displayspaces space: %lld", space_id);
                     break;
                 }
             }
@@ -373,7 +373,7 @@ static void init_instances()
     uint64_t ds_instance_addr = baseaddr + 0xe10;
     ds_instance_addr = hex_find_seq(ds_instance_addr, ds_c_pattern);
     uint32_t offset = *(int32_t *)ds_instance_addr;
-    NSLog(@"ds location = 0x%llX", ds_instance_addr + offset + 0x4);
+    // NSLog(@"ds location = 0x%llX", ds_instance_addr + offset + 0x4);
 
     ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
     [ds_instance retain];
