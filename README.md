@@ -46,3 +46,5 @@ To set window sticky (show on all spaces), send: `window_sticky <cgwindowid> <1 
 To set window position, send: `window_move <cgwindowid> <x> <y>`
 
 To set window shadow, send: `window_shadow <cgwindowid> <1 | 0>`
+
+To switch to a different space, bypassing animation, send: `space <cgsspaceid>`
