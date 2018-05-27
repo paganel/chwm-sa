@@ -238,30 +238,30 @@ DAEMON_CALLBACK(DaemonCallback)
                 return;
             }
 
-            id dest_space = nil;
-            NSArray *allspaces = (NSArray *) objc_msgSend(ds_instance, @selector(allUserSpaces));
-            for (id space in allspaces) {
-                uint64_t sid = (uint64_t) objc_msgSend(space, @selector(spid));
-                if (sid == space_id) {
-                    dest_space = space;
-                    break;
-                }
-                // NSLog(@"dock.spaces allspaces: %lld", sid);
-            }
-
             NSArray *displayspaces = (NSArray*) my_get_ivar(ds_instance, "_displaySpaces");
             for (id dspace in displayspaces) {
                 id cspace = my_get_ivar(dspace, "_currentSpace");
                 uint64_t sid = (uint64_t) objc_msgSend(cspace, @selector(spid));
                 if (sid == csid) {
-                    NSArray *NSSSpace = @[ @(csid) ];
-                    NSArray *NSASpace = @[ @(space_id) ];
-                    CGSShowSpaces(_connection, (__bridge CFArrayRef)NSASpace);
-                    CGSHideSpaces(_connection, (__bridge CFArrayRef)NSSSpace);
-                    CGSManagedDisplaySetCurrentSpace(_connection, dest_display, space_id);
-                    my_set_ivar(dspace, "_currentSpace", dest_space);
-                    // NSLog(@"dock.displayspaces space: %lld", space_id);
-                    break;
+                    id dest_space = nil;
+                    NSArray *allspaces = (NSArray *) my_get_ivar(dspace, "spaces");
+                    for (id space in allspaces) {
+                        uint64_t sid = (uint64_t) objc_msgSend(space, @selector(spid));
+                        if (sid == space_id) {
+                            dest_space = space;
+                            break;
+                        }
+                    }
+
+                    if (dest_space != nil) {
+                        NSArray *NSSSpace = @[ @(csid) ];
+                        NSArray *NSASpace = @[ @(space_id) ];
+                        CGSShowSpaces(_connection, (__bridge CFArrayRef)NSASpace);
+                        CGSHideSpaces(_connection, (__bridge CFArrayRef)NSSSpace);
+                        CGSManagedDisplaySetCurrentSpace(_connection, dest_display, space_id);
+                        my_set_ivar(dspace, "_currentSpace", dest_space);
+                        break;
+                    }
                 }
             }
 
