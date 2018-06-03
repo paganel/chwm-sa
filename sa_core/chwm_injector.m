@@ -1,13 +1,11 @@
 #import <Cocoa/Cocoa.h>
 #import <Foundation/Foundation.h>
 
-#define internal static
-
 @interface Payload: NSObject
 + (void) load;
 @end
 
-internal Class _Instance;
+static Class _instance;
 
 @interface CHWMInjector : NSObject
 @end
@@ -15,32 +13,26 @@ internal Class _Instance;
 @implementation CHWMInjector
 @end
 
-OSErr CHWMhandleInject(const AppleEvent *Event, AppleEvent *Reply, long Context) {
-    NSLog(@"CHWM injection begin");
+OSErr CHWMhandleInject(const AppleEvent *event, AppleEvent *reply, long context) {
+    NSLog(@"[chunkwm-sa] injection begin");
 
-    NSBundle* CHWMBundle = [NSBundle bundleForClass:[CHWMInjector class]];
-    NSLog(@"Bundle %@", CHWMBundle);
+    NSBundle* chwm_bundle = [NSBundle bundleForClass:[CHWMInjector class]];
+    NSString *payload_path = [chwm_bundle pathForResource:@"chunkwm-sa" ofType:@"bundle"];
+    NSBundle *payload_bundle = [NSBundle bundleWithPath:payload_path];
 
-    NSString *PayloadPath = [CHWMBundle pathForResource:@"chunkwm-sa" ofType:@"bundle"];
-    NSLog(@"Payload path %@", PayloadPath);
-
-    NSBundle *PayloadBundle = [NSBundle bundleWithPath:PayloadPath];
-    NSLog(@"Payload bundle %@", PayloadBundle);
-
-    if(!PayloadBundle)
-    {
-        NSLog(@"Couldn't find Payload Bundle!");
+    if (!payload_bundle) {
+        NSLog(@"[chunkwm-sa] Couldn't find Payload Bundle!");
         return 2;
     }
 
     NSError *Error;
-    if(![PayloadBundle loadAndReturnError:&Error]) {
-        NSLog(@"Couldn't load Payload!");
+    if (![payload_bundle loadAndReturnError:&Error]) {
+        NSLog(@"[chunkwm-sa] Couldn't load Payload!");
         return 2;
     }
 
-    _Instance = [PayloadBundle principalClass];
-    NSLog(@"CHWM injection end");
+    _instance = [payload_bundle principalClass];
+    NSLog(@"[chunkwm-sa] injection end");
 
     return noErr;
 }
