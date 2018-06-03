@@ -176,11 +176,11 @@ static void init_instances()
 
     ds_instance_addr = hex_find_seq(ds_instance_addr, ds_c_pattern);
     if (ds_instance_addr == 0) {
-        NSLog(@"[chwm-sa] Failed to get pointer to Dock.Spaces! Space-switching will not work..");
+        NSLog(@"[chunkwm-sa] Failed to get pointer to Dock.Spaces! Space-switching will not work..");
         ds_instance = nil;
     } else {
         uint32_t offset = *(int32_t *)ds_instance_addr;
-        NSLog(@"[chwm-sa] Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
+        NSLog(@"[chunkwm-sa] Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
         ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
         [ds_instance retain];
     }
@@ -542,13 +542,13 @@ static bool start_daemon(int port)
 @implementation Payload
 + (void) load
 {
-    NSLog(@"[chwm-sa] Loaded");
+    NSLog(@"[chunkwm-sa] Loaded");
     _connection = CGSMainConnectionID();
 
     if (start_daemon(5050)) {
-        NSLog(@"[chwm-sa] Now listening..");
+        NSLog(@"[chunkwm-sa] Now listening..");
     } else {
-        NSLog(@"[chwm-sa] Failed to spawn thread..");
+        NSLog(@"[chunkwm-sa] Failed to spawn thread..");
     }
 }
 @end
