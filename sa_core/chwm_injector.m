@@ -1,19 +1,16 @@
 #import <Cocoa/Cocoa.h>
 #import <Foundation/Foundation.h>
 
-@interface Payload: NSObject
-+ (void) load;
-@end
-
-static Class _instance;
-
 @interface CHWMInjector : NSObject
 @end
 
 @implementation CHWMInjector
 @end
 
-OSErr CHWMhandleInject(const AppleEvent *event, AppleEvent *reply, long context) {
+static Class _instance;
+
+OSErr CHWMhandleInject(const AppleEvent *event, AppleEvent *reply, long context)
+{
     NSLog(@"[chunkwm-sa] injection begin");
 
     NSBundle* chwm_bundle = [NSBundle bundleForClass:[CHWMInjector class]];
@@ -21,13 +18,13 @@ OSErr CHWMhandleInject(const AppleEvent *event, AppleEvent *reply, long context)
     NSBundle *payload_bundle = [NSBundle bundleWithPath:payload_path];
 
     if (!payload_bundle) {
-        NSLog(@"[chunkwm-sa] Couldn't find Payload Bundle!");
+        NSLog(@"[chunkwm-sa] could not locate Payload Bundle!");
         return 2;
     }
 
-    NSError *Error;
-    if (![payload_bundle loadAndReturnError:&Error]) {
-        NSLog(@"[chunkwm-sa] Couldn't load Payload!");
+    NSError *error;
+    if (![payload_bundle loadAndReturnError:&error]) {
+        NSLog(@"[chunkwm-sa] could not load payload!");
         return 2;
     }
 
