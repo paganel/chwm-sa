@@ -542,13 +542,13 @@ static bool start_daemon(int port)
 @implementation Payload
 + (void) load
 {
-    NSLog(@"[chunkwm-sa] Loaded");
+    NSLog(@"[chunkwm-sa] loaded payload");
     _connection = CGSMainConnectionID();
 
     if (start_daemon(5050)) {
-        NSLog(@"[chunkwm-sa] Now listening..");
+        NSLog(@"[chunkwm-sa] now listening on port 5050..");
     } else {
-        NSLog(@"[chunkwm-sa] Failed to spawn thread..");
+        NSLog(@"[chunkwm-sa] failed to spawn thread..");
     }
 }
 @end
