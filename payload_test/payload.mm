@@ -180,7 +180,7 @@ static void init_instances()
         ds_instance = nil;
     } else {
         uint32_t offset = *(int32_t *)ds_instance_addr;
-        NSLog(@"[chwm-sa]Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
+        NSLog(@"[chwm-sa] Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
         ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
         [ds_instance retain];
     }
@@ -544,6 +544,11 @@ static bool start_daemon(int port)
 {
     NSLog(@"[chwm-sa] Loaded");
     _connection = CGSMainConnectionID();
-    start_daemon(5050);
+
+    if (start_daemon(5050)) {
+        NSLog(@"[chwm-sa] Now listening..");
+    } else {
+        NSLog(@"[chwm-sa] Failed to spawn thread..");
+    }
 }
 @end
