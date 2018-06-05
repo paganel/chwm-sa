@@ -345,6 +345,7 @@ static void do_space_change(const char *message)
         }
 
         if (dest_space != nil) {
+            [dest_space retain];
             NSArray *ns_source_space = @[ @(source_space_id) ];
             NSArray *ns_dest_space = @[ @(dest_space_id) ];
             CGSShowSpaces(_connection, (__bridge CFArrayRef) ns_dest_space);
