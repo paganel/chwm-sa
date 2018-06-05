@@ -188,7 +188,7 @@ static void init_instances()
         uint32_t offset = *(int32_t *)ds_instance_addr;
         NSLog(@"[chunkwm-sa] Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
         ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
-        [ds_instance retain];
+        // [ds_instance retain];
     }
 }
 
