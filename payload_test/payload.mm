@@ -311,8 +311,8 @@ static void do_space_change(const char *message)
     }
 
     id dest_space = nil;
-    NSArray *all_spaces = (NSArray *) objc_msgSend(ds_instance, @selector(allUserSpaces));
-    for (id space in all_spaces) {
+    NSArray *spaces_for_display = (NSArray *) objc_msgSend(ds_instance, @selector(spacesForDisplay:), dest_display);
+    for (id space in spaces_for_display) {
         if (dest_space_id == get_space_id(space)) {
             dest_space = space;
             break;
