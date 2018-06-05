@@ -188,7 +188,7 @@ static void init_instances()
         uint32_t offset = *(int32_t *)ds_instance_addr;
         NSLog(@"[chunkwm-sa] Dock.Spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
         ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
-        // [ds_instance retain];
+        [ds_instance retain];
     }
 }
 
@@ -326,34 +326,34 @@ static void do_space_change(const char *message)
         return;
     }
 
-    @autoreleasepool {
-        NSArray *display_spaces = (NSArray *) my_get_ivar(ds_instance, "_displaySpaces");
-        for (id display_space in display_spaces) {
-            id display_source_space = my_get_ivar(display_space, "_currentSpace");
-            uint64_t display_source_space_id = (uint64_t) objc_msgSend(display_source_space, @selector(spid));
-            if (display_source_space_id != source_space_id) {
-                continue;
-            }
+    NSArray *display_spaces = (NSArray *) my_get_ivar(ds_instance, "_displaySpaces");
+    for (id display_space in display_spaces) {
+        id display_source_space = my_get_ivar(display_space, "_currentSpace");
+        uint64_t display_source_space_id = (uint64_t) objc_msgSend(display_source_space, @selector(spid));
+        if (display_source_space_id != source_space_id) {
+            continue;
+        }
 
-            id dest_space = nil;
-            NSArray *all_spaces = (NSArray *) my_get_ivar(display_space, "spaces");
-            for (id space in all_spaces) {
-                uint64_t space_id = (uint64_t) objc_msgSend(space, @selector(spid));
-                if (space_id == dest_space_id) {
-                    dest_space = space;
-                    break;
-                }
-            }
-
-            if (dest_space != nil) {
-                NSArray *NSSSpace = @[ @(source_space_id) ];
-                NSArray *NSASpace = @[ @(dest_space_id) ];
-                CGSShowSpaces(_connection, (__bridge CFArrayRef)NSASpace);
-                CGSHideSpaces(_connection, (__bridge CFArrayRef)NSSSpace);
-                CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
-                my_set_ivar(display_space, "_currentSpace", dest_space);
+        id dest_space = nil;
+        NSArray *all_spaces = (NSArray *) my_get_ivar(display_space, "spaces");
+        for (id space in all_spaces) {
+            uint64_t space_id = (uint64_t) objc_msgSend(space, @selector(spid));
+            if (space_id == dest_space_id) {
+                dest_space = space;
                 break;
             }
+        }
+
+        if (dest_space != nil) {
+            NSArray *ns_source_space = @[ @(source_space_id) ];
+            NSArray *ns_dest_space = @[ @(dest_space_id) ];
+            CGSShowSpaces(_connection, (__bridge CFArrayRef) ns_dest_space);
+            CGSHideSpaces(_connection, (__bridge CFArrayRef) ns_source_space);
+            CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
+            my_set_ivar(display_space, "_currentSpace", dest_space);
+            [ns_dest_space release];
+            [ns_source_space release];
+            break;
         }
     }
 
