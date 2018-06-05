@@ -385,34 +385,6 @@ static void do_window_alpha_fade(const char *message)
 
 static void do_window_level(const char *message)
 {
-    /*
-     *   enum _CGCommonWindowLevelKey
-     *   {
-     *       kCGBaseWindowLevelKey               =  0,
-     *       kCGMinimumWindowLevelKey            =  1,
-     *       kCGDesktopWindowLevelKey            =  2,
-     *       kCGBackstopMenuLevelKey             =  3,
-     *       kCGNormalWindowLevelKey             =  4,
-     *       kCGFloatingWindowLevelKey           =  5,
-     *       kCGTornOffMenuWindowLevelKey        =  6,
-     *       kCGDockWindowLevelKey               =  7,
-     *       kCGMainMenuWindowLevelKey           =  8,
-     *       kCGStatusWindowLevelKey             =  9,
-     *       kCGModalPanelWindowLevelKey         = 10,
-     *       kCGPopUpMenuWindowLevelKey          = 11,
-     *       kCGDraggingWindowLevelKey           = 12,
-     *       kCGScreenSaverWindowLevelKey        = 13,
-     *       kCGMaximumWindowLevelKey            = 14,
-     *       kCGOverlayWindowLevelKey            = 15,
-     *       kCGHelpWindowLevelKey               = 16,
-     *       kCGUtilityWindowLevelKey            = 17,
-     *       kCGDesktopIconWindowLevelKey        = 18,
-     *       kCGCursorWindowLevelKey             = 19,
-     *       kCGAssistiveTechHighWindowLevelKey  = 20,
-     *       kCGNumberOfWindowLevelKeys
-     *   }; typedef int32_t CGWindowLevelKey;
-     */
-
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
     Token key_token = get_token(&message);
