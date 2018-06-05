@@ -50,24 +50,30 @@ static void dump_class_info(Class c)
 {
     const char *name = class_getName(c);
     unsigned int count = 0;
+
     Ivar *ivar_list = class_copyIvarList(c, &count);
     for (int i = 0; i < count; i++) {
         Ivar ivar = ivar_list[i];
         const char *ivar_name = ivar_getName(ivar);
         NSLog(@"%s ivar: %s", name, ivar_name);
     }
+    if (ivar_list) free(ivar_list);
+
     objc_property_t *property_list = class_copyPropertyList(c, &count);
     for (int i = 0; i < count; i++) {
         objc_property_t property = property_list[i];
         const char *prop_name = property_getName(property);
         NSLog(@"%s property: %s", name, prop_name);
     }
+    if (property_list) free(property_list);
+
     Method *method_list = class_copyMethodList(c, &count);
     for (int i = 0; i < count; i++) {
         Method method = method_list[i];
         const char *method_name = sel_getName(method_getName(method));
         NSLog(@"%s method: %s", name, method_name);
     }
+    if (method_list) free(method_list);
 }
 
 static Class dump_class_info(const char *name)
@@ -81,7 +87,7 @@ static Class dump_class_info(const char *name)
 
 static uint64_t static_base_address(void)
 {
-    const struct segment_command_64* command = getsegbyname("__TEXT");
+    const struct segment_command_64 *command = getsegbyname("__TEXT");
     uint64_t addr = command->vmaddr;
     return addr;
 }
@@ -194,9 +200,12 @@ static id my_get_ivar(id instance, const char *name)
         Ivar ivar = ivar_list[i];
         const char *ivar_name = ivar_getName(ivar);
         if (strcmp(ivar_name, name) == 0) {
-            return object_getIvar(instance, ivar);
+            id result = object_getIvar(instance, ivar);
+            free(ivar_list);
+            return result;
         }
     }
+    if (ivar_list) free(ivar_list);
     return nil;
 }
 
@@ -209,9 +218,11 @@ static void my_set_ivar(id instance, const char *name, id value)
         const char *ivar_name = ivar_getName(ivar);
         if (strcmp(ivar_name, name) == 0) {
             object_setIvar(instance, ivar, value);
+            free(ivar_list);
             return;
         }
     }
+    if (ivar_list) free(ivar_list);
 }
 
 struct Token
@@ -315,32 +326,34 @@ static void do_space_change(const char *message)
         return;
     }
 
-    NSArray *display_spaces = (NSArray*) my_get_ivar(ds_instance, "_displaySpaces");
-    for (id display_space in display_spaces) {
-        id display_source_space = my_get_ivar(display_space, "_currentSpace");
-        uint64_t display_source_space_id = (uint64_t) objc_msgSend(display_source_space, @selector(spid));
-        if (display_source_space_id != source_space_id) {
-            continue;
-        }
+    @autoreleasepool {
+        NSArray *display_spaces = (NSArray *) my_get_ivar(ds_instance, "_displaySpaces");
+        for (id display_space in display_spaces) {
+            id display_source_space = my_get_ivar(display_space, "_currentSpace");
+            uint64_t display_source_space_id = (uint64_t) objc_msgSend(display_source_space, @selector(spid));
+            if (display_source_space_id != source_space_id) {
+                continue;
+            }
 
-        id dest_space = nil;
-        NSArray *all_spaces = (NSArray *) my_get_ivar(display_space, "spaces");
-        for (id space in all_spaces) {
-            uint64_t space_id = (uint64_t) objc_msgSend(space, @selector(spid));
-            if (space_id == dest_space_id) {
-                dest_space = space;
+            id dest_space = nil;
+            NSArray *all_spaces = (NSArray *) my_get_ivar(display_space, "spaces");
+            for (id space in all_spaces) {
+                uint64_t space_id = (uint64_t) objc_msgSend(space, @selector(spid));
+                if (space_id == dest_space_id) {
+                    dest_space = space;
+                    break;
+                }
+            }
+
+            if (dest_space != nil) {
+                NSArray *NSSSpace = @[ @(source_space_id) ];
+                NSArray *NSASpace = @[ @(dest_space_id) ];
+                CGSShowSpaces(_connection, (__bridge CFArrayRef)NSASpace);
+                CGSHideSpaces(_connection, (__bridge CFArrayRef)NSSSpace);
+                CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
+                my_set_ivar(display_space, "_currentSpace", dest_space);
                 break;
             }
-        }
-
-        if (dest_space != nil) {
-            NSArray *NSSSpace = @[ @(source_space_id) ];
-            NSArray *NSASpace = @[ @(dest_space_id) ];
-            CGSShowSpaces(_connection, (__bridge CFArrayRef)NSASpace);
-            CGSHideSpaces(_connection, (__bridge CFArrayRef)NSSSpace);
-            CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
-            my_set_ivar(display_space, "_currentSpace", dest_space);
-            break;
         }
     }
 
