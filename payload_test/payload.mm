@@ -192,39 +192,6 @@ static void init_instances()
     }
 }
 
-static id my_get_ivar(id instance, const char *name)
-{
-    unsigned int count = 0;
-    Ivar *ivar_list = class_copyIvarList([instance class], &count);
-    for (int i = 0; i < count; i++) {
-        Ivar ivar = ivar_list[i];
-        const char *ivar_name = ivar_getName(ivar);
-        if (strcmp(ivar_name, name) == 0) {
-            id result = object_getIvar(instance, ivar);
-            free(ivar_list);
-            return result;
-        }
-    }
-    if (ivar_list) free(ivar_list);
-    return nil;
-}
-
-static void my_set_ivar(id instance, const char *name, id value)
-{
-    unsigned int count = 0;
-    Ivar *ivar_list = class_copyIvarList([instance class], &count);
-    for (int i = 0; i < count; i++) {
-        Ivar ivar = ivar_list[i];
-        const char *ivar_name = ivar_getName(ivar);
-        if (strcmp(ivar_name, name) == 0) {
-            object_setIvar(instance, ivar, value);
-            free(ivar_list);
-            return;
-        }
-    }
-    if (ivar_list) free(ivar_list);
-}
-
 struct Token
 {
     const char *text;
@@ -326,16 +293,25 @@ static void do_space_change(const char *message)
         return;
     }
 
-    NSArray *display_spaces = (NSArray *) my_get_ivar(ds_instance, "_displaySpaces");
+    NSArray *display_spaces = nil;
+    object_getInstanceVariable(ds_instance, "_displaySpaces", (void **) &display_spaces);
+    if (display_spaces == nil) return;
+
     for (id display_space in display_spaces) {
-        id display_source_space = my_get_ivar(display_space, "_currentSpace");
+        id display_source_space = nil;
+        object_getInstanceVariable(display_space, "_currentSpace", (void **) &display_source_space);
+        if (display_source_space == nil) return;
+
         uint64_t display_source_space_id = (uint64_t) objc_msgSend(display_source_space, @selector(spid));
         if (display_source_space_id != source_space_id) {
             continue;
         }
 
+        NSArray *all_spaces = nil;
+        object_getInstanceVariable(display_space, "spaces", (void **) &all_spaces);
+        if (all_spaces == nil) return;
+
         id dest_space = nil;
-        NSArray *all_spaces = (NSArray *) my_get_ivar(display_space, "spaces");
         for (id space in all_spaces) {
             uint64_t space_id = (uint64_t) objc_msgSend(space, @selector(spid));
             if (space_id == dest_space_id) {
@@ -345,13 +321,12 @@ static void do_space_change(const char *message)
         }
 
         if (dest_space != nil) {
-            [dest_space retain];
             NSArray *ns_source_space = @[ @(source_space_id) ];
             NSArray *ns_dest_space = @[ @(dest_space_id) ];
             CGSShowSpaces(_connection, (__bridge CFArrayRef) ns_dest_space);
             CGSHideSpaces(_connection, (__bridge CFArrayRef) ns_source_space);
             CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
-            my_set_ivar(display_space, "_currentSpace", dest_space);
+            object_setInstanceVariable(display_space, "_currentSpace", dest_space);
             [ns_dest_space release];
             [ns_source_space release];
             break;
