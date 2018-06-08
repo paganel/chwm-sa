@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 rm -rf bin
 mkdir bin
 mkdir bin/chunkwm-sa.bundle
