@@ -174,6 +174,14 @@ loc_5a14:
     return 0;
 }
 
+static void objc_storeStrong(id *object, id value)
+{
+    id oldValue = *object;
+    value = [value retain];
+    *object = value;
+    [oldValue release];
+}
+
 const char *ds_c_pattern = "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00";
 static void init_instances()
 {
@@ -187,10 +195,55 @@ static void init_instances()
     } else {
         uint32_t offset = *(int32_t *)ds_instance_addr;
         NSLog(@"[chunkwm-sa] dock.spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
-        ds_instance = *(id *)(ds_instance_addr + offset + 0x4);
-        [ds_instance retain];
+        objc_storeStrong(&ds_instance, *(id *)(ds_instance_addr + offset + 0x4));
     }
 }
+
+/*
+static uint64_t get_method_imp(const char *name, SEL sel)
+{
+    Class c = objc_getClass(name);
+    return (uint64_t) method_getImplementation(class_getInstanceMethod(c, sel));
+}
+
+static uint64_t get_method_pointer_from_call_at_offset(uint64_t arg0, uint64_t arg1)
+{
+    uint64_t rax = ((*(int8_t *)(arg0 + arg1 + 0x4) & 0xff) << 0x18 | (*(int8_t *)(arg0 + arg1 + 0x3) & 0xff) << 0x10 | (*(int8_t *)(arg0 + arg1 + 0x2) & 0xff) << 0x8 | *(int8_t *)(arg0 + arg1 + 0x1) & 0xff) + 0x5 + arg0 + arg1;
+    return rax;
+}
+
+static uint64_t fix_animation_duration(uint64_t addr)
+{
+    const char *pattern = "F2 0F 10 05 ?? ?? ?? 00 BA 00 00 00 00 4C 89 F7 48 8B B5 ?? FF FF FF 48 89 D9 44 8B";
+    uint64_t rbx = hex_find_seq(addr, pattern);
+    uint64_t r13 = rbx + 0x8;
+    uint64_t transition_time = 0;
+    // vm_protect(*(int32_t *)*_mach_task_self_, rbx + 0x4, 0x8, 0x0, 0x17);
+    uint64_t rax = transition_time - r13;
+    *(int8_t *)(rbx + 0x4) = rax;
+    *(int8_t *)(rbx + 0x5) = (rax >> 8) & 0xff;
+    *(int8_t *)(rbx + 0x6) = transition_time - r13 >> 0x10;
+    *(int8_t *)(rbx + 0x7) = transition_time - r13 >> 0x18;
+    return rax;
+}
+
+static void disable_native_transitions()
+{
+    uint64_t impl = get_method_imp("Dock.DisplaySpaces", @selector(switchToSpace:fromServer:updatePSN:));
+    uint64_t method_at_offset = get_method_pointer_from_call_at_offset(impl, 0x47);
+    fix_animation_duration(method_at_offset);
+}
+
+static void *get_ivar_pointer(id instance, const char *name)
+{
+    Ivar ivar = class_getInstanceVariable(object_getClass(instance), name);
+    return ivar == NULL ? NULL : (__bridge uint8_t *)instance + ivar_getOffset(ivar);
+}
+
+    uint64_t ip = (uint64_t) get_ivar_pointer(display_space, "_currentSpace");
+    size_t size = class_getInstanceSize([(*(id *)ip) class]);
+    vm_protect(mach_task_self(), ip, size, 0x0, 0x17);
+*/
 
 static inline id get_ivar_value(id instance, const char *name)
 {
