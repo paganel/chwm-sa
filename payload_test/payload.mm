@@ -382,7 +382,7 @@ static void do_space_change(const char *message)
         CGSShowSpaces(_connection, (__bridge CFArrayRef) ns_dest_space);
         CGSHideSpaces(_connection, (__bridge CFArrayRef) ns_source_space);
         CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
-        set_ivar_value(display_space, "_currentSpace", dest_space);
+        set_ivar_value(display_space, "_currentSpace", [dest_space retain]);
         [ns_dest_space release];
         [ns_source_space release];
         break;
