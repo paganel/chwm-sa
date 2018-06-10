@@ -13,23 +13,32 @@ OSErr CHWMhandleInject(const AppleEvent *event, AppleEvent *reply, long context)
 {
     NSLog(@"[chunkwm-sa] injection begin");
 
+    OSErr result = noErr;
     NSBundle* chwm_bundle = [NSBundle bundleForClass:[CHWMInjector class]];
     NSString *payload_path = [chwm_bundle pathForResource:@"chunkwm-sa" ofType:@"bundle"];
     NSBundle *payload_bundle = [NSBundle bundleWithPath:payload_path];
 
     if (!payload_bundle) {
-        NSLog(@"[chunkwm-sa] could not locate Payload Bundle!");
-        return 2;
+        NSLog(@"[chunkwm-sa] could not locate payload!");
+        result = 2;
+        goto end;
     }
 
-    NSError *error;
-    if (![payload_bundle loadAndReturnError:&error]) {
+    if ([payload_bundle isLoaded]) {
+        NSLog(@"[chunkwm-sa] payload has already been loaded!");
+        result = 2;
+        goto end;
+    }
+
+    if (![payload_bundle load]) {
         NSLog(@"[chunkwm-sa] could not load payload!");
-        return 2;
+        result = 2;
+        goto end;
     }
 
     _instance = [payload_bundle principalClass];
-    NSLog(@"[chunkwm-sa] injection end");
 
-    return noErr;
+end:
+    NSLog(@"[chunkwm-sa] injection end");
+    return result;
 }

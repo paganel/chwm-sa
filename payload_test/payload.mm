@@ -39,7 +39,6 @@ extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], si
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 
 static CGSConnectionID _connection;
-static bool did_init_instances;
 static id ds_instance;
 
 static socklen_t sin_size = sizeof(struct sockaddr);
@@ -174,14 +173,6 @@ loc_5a14:
     return 0;
 }
 
-static void objc_storeStrong(id *object, id value)
-{
-    id oldValue = *object;
-    value = [value retain];
-    *object = value;
-    [oldValue release];
-}
-
 const char *ds_c_pattern = "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00";
 static void init_instances()
 {
@@ -194,8 +185,8 @@ static void init_instances()
         ds_instance = nil;
     } else {
         uint32_t offset = *(int32_t *)ds_instance_addr;
-        NSLog(@"[chunkwm-sa] dock.spaces found at address 0x%llX", ds_instance_addr + offset + 0x4);
-        objc_storeStrong(&ds_instance, *(id *)(ds_instance_addr + offset + 0x4));
+        NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX", baseaddr, ds_instance_addr + offset + 0x4);
+        ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
     }
 }
 
@@ -244,6 +235,7 @@ static void *get_ivar_pointer(id instance, const char *name)
     size_t size = class_getInstanceSize([(*(id *)ip) class]);
     vm_protect(mach_task_self(), ip, size, 0x0, 0x17);
 */
+
 
 static inline id get_ivar_value(id instance, const char *name)
 {
@@ -340,11 +332,6 @@ static Token get_token(const char **message)
 
 static void do_space_change(const char *message)
 {
-    if (!did_init_instances) {
-        did_init_instances = true;
-        init_instances();
-    }
-
     if (ds_instance == nil) {
         return;
     }
@@ -575,6 +562,7 @@ static bool start_daemon(int port)
     _connection = CGSMainConnectionID();
 
     if (start_daemon(5050)) {
+        init_instances();
         NSLog(@"[chunkwm-sa] now listening on port 5050..");
     } else {
         NSLog(@"[chunkwm-sa] failed to spawn thread..");
