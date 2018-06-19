@@ -4,6 +4,7 @@
 machine while testing or otherwise trying to install this extension.
 
 I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6), Sierra (10.12.6) and High Sierra (10.13.0) with the below instructions.
+(Features that interact with spaces only work on High Sierra)
 
 CHWMInjector.osax is our scripting addition.
 
@@ -48,3 +49,7 @@ To set window position, send: `window_move <cgwindowid> <x> <y>`
 To set window shadow, send: `window_shadow <cgwindowid> <1 | 0>`
 
 To switch to a different space, bypassing animation, send: `space <cgsspaceid>`
+
+To create a new space on the active display, send: `space_create <focused_cgsspaceid_of_a_display>`
+
+To destroy the active space, send: `space_destroy <focused_cgsspaceid_of_a_display>`

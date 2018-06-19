@@ -27,6 +27,7 @@ extern "C" CGError CGSSetWindowListAlpha(CGSConnectionID cid, const uint32_t *wi
 extern "C" CGError CGSSetWindowLevel(CGSConnectionID cid, uint32_t wid, int level);
 extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
 extern "C" void CGSManagedDisplaySetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref, uint64_t spid);
+extern "C" uint64_t CGSManagedDisplayGetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref);
 extern "C" CFArrayRef CGSCopyManagedDisplaySpaces(const CGSConnectionID cid);
 extern "C" CFStringRef CGSCopyManagedDisplayForSpace(const CGSConnectionID cid, uint64_t spid);
 extern "C" void CGSShowSpaces(CGSConnectionID cid, CFArrayRef spaces);
@@ -40,6 +41,9 @@ extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], 
 
 static CGSConnectionID _connection;
 static id ds_instance;
+static uint64_t add_space_fp;
+static uint64_t remove_space_fp;
+static Class managed_space;
 
 static socklen_t sin_size = sizeof(struct sockaddr);
 static pthread_t daemon_thread;
@@ -174,19 +178,45 @@ loc_5a14:
 }
 
 const char *ds_c_pattern = "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00";
+const char *add_space_pattern = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 38 4C 89 6D B0 49 89 FC 48 BB 01 00 00 00 00 00 00 C0 48 B9 01 00 00 00 00 00 00 80 49 BF F8 FF FF FF FF FF FF 00 49 8D 45 28 48 89 45 C0 4D 8B 75 28 41 80 7D 38 01 4C 89 65 C8";
+const char *remove_space_pattern = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 68 4C 89 45 80 48 89 4D C0 48 89 55 D0 48 89 F3 49 89 FC 49 BE 01 00 00 00 00 00 00 C0 49 89 DD E8 ?? ?? E9 FF 49 89 C7 4D 85 F7";
 static void init_instances()
 {
     uint64_t baseaddr = static_base_address() + image_slide();
-    uint64_t ds_instance_addr = baseaddr + 0xe10;
 
+    uint64_t ds_instance_addr = baseaddr + 0xe10;
     ds_instance_addr = hex_find_seq(ds_instance_addr, ds_c_pattern);
     if (ds_instance_addr == 0) {
         NSLog(@"[chunkwm-sa] failed to get pointer to dock.spaces! space-switching will not work..");
         ds_instance = nil;
+        add_space_fp = 0;
+        remove_space_fp = 0;
     } else {
         uint32_t offset = *(int32_t *)ds_instance_addr;
-        NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX", baseaddr, ds_instance_addr + offset + 0x4);
+        NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, ds_instance_addr + offset + 0x4, ds_instance_addr - baseaddr);
         ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
+
+        uint64_t add_space_addr = baseaddr + 0x335000;
+        add_space_addr = hex_find_seq(add_space_addr, add_space_pattern);
+        if (add_space_addr == 0x0) {
+            NSLog(@"[chunkwm-sa] failed to get pointer to addSpace function..");
+            add_space_fp = 0;
+        } else {
+            NSLog(@"[chunkwm-sa] (0x%llx) addSpace found at address 0x%llX (0x%llx)", baseaddr, add_space_addr, add_space_addr - baseaddr);
+            add_space_fp = add_space_addr;
+        }
+
+        uint64_t remove_space_addr = baseaddr + 0x495000;
+        remove_space_addr = hex_find_seq(remove_space_addr, remove_space_pattern);
+        if (remove_space_addr == 0x0) {
+            NSLog(@"[chunkwm-sa] failed to get pointer to removeSpace function..");
+            remove_space_fp = 0;
+        } else {
+            NSLog(@"[chunkwm-sa] (0x%llx) removeSpace found at address 0x%llX (0x%llx)", baseaddr, remove_space_addr, remove_space_addr - baseaddr);
+            remove_space_fp = remove_space_addr;
+        }
+
+        managed_space = objc_getClass("Dock.ManagedSpace");
     }
 }
 
@@ -197,45 +227,12 @@ static uint64_t get_method_imp(const char *name, SEL sel)
     return (uint64_t) method_getImplementation(class_getInstanceMethod(c, sel));
 }
 
-static uint64_t get_method_pointer_from_call_at_offset(uint64_t arg0, uint64_t arg1)
-{
-    uint64_t rax = ((*(int8_t *)(arg0 + arg1 + 0x4) & 0xff) << 0x18 | (*(int8_t *)(arg0 + arg1 + 0x3) & 0xff) << 0x10 | (*(int8_t *)(arg0 + arg1 + 0x2) & 0xff) << 0x8 | *(int8_t *)(arg0 + arg1 + 0x1) & 0xff) + 0x5 + arg0 + arg1;
-    return rax;
-}
-
-static uint64_t fix_animation_duration(uint64_t addr)
-{
-    const char *pattern = "F2 0F 10 05 ?? ?? ?? 00 BA 00 00 00 00 4C 89 F7 48 8B B5 ?? FF FF FF 48 89 D9 44 8B";
-    uint64_t rbx = hex_find_seq(addr, pattern);
-    uint64_t r13 = rbx + 0x8;
-    uint64_t transition_time = 0;
-    // vm_protect(*(int32_t *)*_mach_task_self_, rbx + 0x4, 0x8, 0x0, 0x17);
-    uint64_t rax = transition_time - r13;
-    *(int8_t *)(rbx + 0x4) = rax;
-    *(int8_t *)(rbx + 0x5) = (rax >> 8) & 0xff;
-    *(int8_t *)(rbx + 0x6) = transition_time - r13 >> 0x10;
-    *(int8_t *)(rbx + 0x7) = transition_time - r13 >> 0x18;
-    return rax;
-}
-
-static void disable_native_transitions()
-{
-    uint64_t impl = get_method_imp("Dock.DisplaySpaces", @selector(switchToSpace:fromServer:updatePSN:));
-    uint64_t method_at_offset = get_method_pointer_from_call_at_offset(impl, 0x47);
-    fix_animation_duration(method_at_offset);
-}
-
 static void *get_ivar_pointer(id instance, const char *name)
 {
     Ivar ivar = class_getInstanceVariable(object_getClass(instance), name);
     return ivar == NULL ? NULL : (__bridge uint8_t *)instance + ivar_getOffset(ivar);
 }
-
-    uint64_t ip = (uint64_t) get_ivar_pointer(display_space, "_currentSpace");
-    size_t size = class_getInstanceSize([(*(id *)ip) class]);
-    vm_protect(mach_task_self(), ip, size, 0x0, 0x17);
 */
-
 
 static inline id get_ivar_value(id instance, const char *name)
 {
@@ -252,6 +249,31 @@ static inline void set_ivar_value(id instance, const char *name, id value)
 static inline uint64_t get_space_id(id space)
 {
     return (uint64_t) objc_msgSend(space, @selector(spid));
+}
+
+static inline id space_for_display_with_id(CFStringRef display_uuid, uint64_t space_id)
+{
+    NSArray *spaces_for_display = (NSArray *) objc_msgSend(ds_instance, @selector(spacesForDisplay:), display_uuid);
+    for (id space in spaces_for_display) {
+        if (space_id == get_space_id(space)) {
+            return space;
+        }
+    }
+    return nil;
+}
+
+static inline id display_space_for_space_with_id(uint64_t space_id)
+{
+    NSArray *display_spaces = get_ivar_value(ds_instance, "_displaySpaces");
+    if (display_spaces != nil) {
+        for (id display_space in display_spaces) {
+            id display_source_space = get_ivar_value(display_space, "_currentSpace");
+            if (get_space_id(display_source_space) == space_id) {
+                return display_space;
+            }
+        }
+    }
+    return nil;
 }
 
 struct Token
@@ -330,65 +352,64 @@ static Token get_token(const char **message)
     return token;
 }
 
+typedef void (*remove_space_call)(id space, id display_space, id ds_instance, uint64_t space_id1, uint64_t space_id2);
+static void do_space_destroy(const char *message)
+{
+    Token space_id_token = get_token(&message);
+    uint64_t space_id = token_to_uint64t(space_id_token);
+    CFStringRef display_uuid = CGSCopyManagedDisplayForSpace(_connection, space_id);
+    id space = objc_msgSend(ds_instance, @selector(currentSpaceforDisplayUUID:), display_uuid);
+    id display_space = display_space_for_space_with_id(space_id);
+    ((remove_space_call) remove_space_fp)(space, display_space, ds_instance, space_id, space_id);
+    uint64_t dest_space_id = CGSManagedDisplayGetCurrentSpace(_connection, display_uuid);
+    id dest_space = space_for_display_with_id(display_uuid, dest_space_id);
+    set_ivar_value(display_space, "_currentSpace", [dest_space retain]);
+    CFRelease(display_uuid);
+}
+
+#define asm__call_add_space(v0,v1,func) \
+        __asm__("movq %0, %%rdi;""movq %1, %%r13;""callq *%2;" : :"r"(v0), "r"(v1), "r"(func) :"%rdi", "%r13");
+static void do_space_create(const char *message)
+{
+    Token space_id_token = get_token(&message);
+    uint64_t __block space_id = token_to_uint64t(space_id_token);
+    volatile bool __block is_finished = false;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0), dispatch_get_main_queue(), ^{
+        id new_space = [[managed_space alloc] init];
+        id display_space = display_space_for_space_with_id(space_id);
+        asm__call_add_space(new_space, display_space, add_space_fp);
+        is_finished = true;
+    });
+    while (!is_finished) { /* maybe spin lock */ }
+}
+
 static void do_space_change(const char *message)
 {
-    if (ds_instance == nil) {
-        return;
-    }
-
     Token token = get_token(&message);
     uint64_t dest_space_id = token_to_uint64t(token);
-    if (!dest_space_id) {
-        return;
-    }
+    if (dest_space_id) {
+        CFStringRef dest_display = CGSCopyManagedDisplayForSpace(_connection, dest_space_id);
+        id source_space = objc_msgSend(ds_instance, @selector(currentSpaceforDisplayUUID:), dest_display);
+        uint64_t source_space_id = get_space_id(source_space);
 
-    CFStringRef dest_display = CGSCopyManagedDisplayForSpace(_connection, dest_space_id);
-    id source_space = objc_msgSend(ds_instance, @selector(currentSpaceforDisplayUUID:), dest_display);
-    uint64_t source_space_id = get_space_id(source_space);
-    if (source_space_id == dest_space_id) {
-        CFRelease(dest_display);
-        return;
-    }
-
-    id dest_space = nil;
-    NSArray *spaces_for_display = (NSArray *) objc_msgSend(ds_instance, @selector(spacesForDisplay:), dest_display);
-    for (id space in spaces_for_display) {
-        if (dest_space_id == get_space_id(space)) {
-            dest_space = space;
-            break;
+        if (source_space_id != dest_space_id) {
+            id dest_space = space_for_display_with_id(dest_display, dest_space_id);
+            if (dest_space != nil) {
+                id display_space = display_space_for_space_with_id(source_space_id);
+                if (display_space != nil) {
+                    NSArray *ns_source_space = @[ @(source_space_id) ];
+                    NSArray *ns_dest_space = @[ @(dest_space_id) ];
+                    CGSShowSpaces(_connection, (__bridge CFArrayRef) ns_dest_space);
+                    CGSHideSpaces(_connection, (__bridge CFArrayRef) ns_source_space);
+                    CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
+                    set_ivar_value(display_space, "_currentSpace", [dest_space retain]);
+                    [ns_dest_space release];
+                    [ns_source_space release];
+                }
+            }
         }
-    }
-
-    if (dest_space == nil) {
         CFRelease(dest_display);
-        return;
     }
-
-    NSArray *display_spaces = get_ivar_value(ds_instance, "_displaySpaces");
-    if (display_spaces == nil) {
-        CFRelease(dest_display);
-        return;
-    }
-
-    for (id display_space in display_spaces) {
-        id display_source_space = get_ivar_value(display_space, "_currentSpace");
-        if ((display_source_space == nil) ||
-            (get_space_id(display_source_space) != source_space_id)) {
-            continue;
-        }
-
-        NSArray *ns_source_space = @[ @(source_space_id) ];
-        NSArray *ns_dest_space = @[ @(dest_space_id) ];
-        CGSShowSpaces(_connection, (__bridge CFArrayRef) ns_dest_space);
-        CGSHideSpaces(_connection, (__bridge CFArrayRef) ns_source_space);
-        CGSManagedDisplaySetCurrentSpace(_connection, dest_display, dest_space_id);
-        set_ivar_value(display_space, "_currentSpace", [dest_space retain]);
-        [ns_dest_space release];
-        [ns_source_space release];
-        break;
-    }
-
-    CFRelease(dest_display);
 }
 
 static void do_window_move(const char *message)
@@ -471,6 +492,21 @@ static void do_window_shadow(const char *message)
     CGSSetWindowAlpha(_connection, wid, alpha);
 }
 
+static inline bool can_focus_space()
+{
+    return ds_instance != nil;
+}
+
+static inline bool can_create_space()
+{
+    return ds_instance != nil && add_space_fp != 0;
+}
+
+static inline bool can_destroy_space()
+{
+    return ds_instance != nil && remove_space_fp != 0;
+}
+
 static void handle_message(const char *message)
 {
     /*
@@ -481,7 +517,14 @@ static void handle_message(const char *message)
 
     Token token = get_token(&message);
     if (token_equals(token, "space")) {
+        if (!can_focus_space()) return;
         do_space_change(message);
+    } else if (token_equals(token, "space_create")) {
+        if (!can_create_space()) return;
+        do_space_create(message);
+    } else if (token_equals(token, "space_destroy")) {
+        if (!can_destroy_space()) return;
+        do_space_destroy(message);
     } else if (token_equals(token, "window_move")) {
         do_window_move(message);
     } else if (token_equals(token, "window_alpha")) {
