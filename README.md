@@ -1,6 +1,12 @@
+## chunkwm scripting addition
+
+**NOTE**: chunkwm-sa has been integrated into [chunkwm](https://github.com/koekeishiya/chunkwm).
+Check the [official docs](https://koekeishiya.github.io/chunkwm/docs/sa.html) for information about this scripting addition
+and its integration with chunkwm, as well as further instructions on how to install chunkwm-sa.
+
 ## Description
 
-**WARNING**: Use at your own discretion. I take no responsibility if anything should happen to your
+**DISCLAIMER**: Use at your own discretion. I take no responsibility if anything should happen to your
 machine while testing or otherwise trying to install this extension.
 
 I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6), Sierra (10.12.6) and High Sierra (10.13.0) with the below instructions.
