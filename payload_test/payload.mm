@@ -196,24 +196,30 @@ static void init_instances()
         NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, ds_instance_addr + offset + 0x4, ds_instance_addr - baseaddr);
         ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
 
-        uint64_t add_space_addr = baseaddr + 0x335000;
-        add_space_addr = hex_find_seq(add_space_addr, add_space_pattern);
-        if (add_space_addr == 0x0) {
-            NSLog(@"[chunkwm-sa] failed to get pointer to addSpace function..");
-            add_space_fp = 0;
-        } else {
-            NSLog(@"[chunkwm-sa] (0x%llx) addSpace found at address 0x%llX (0x%llx)", baseaddr, add_space_addr, add_space_addr - baseaddr);
-            add_space_fp = add_space_addr;
-        }
+        NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
+        if (os_version.minorVersion == 13) {
+            uint64_t add_space_addr = baseaddr + 0x335000;
+            add_space_addr = hex_find_seq(add_space_addr, add_space_pattern);
+            if (add_space_addr == 0x0) {
+                NSLog(@"[chunkwm-sa] failed to get pointer to addSpace function..");
+                add_space_fp = 0;
+            } else {
+                NSLog(@"[chunkwm-sa] (0x%llx) addSpace found at address 0x%llX (0x%llx)", baseaddr, add_space_addr, add_space_addr - baseaddr);
+                add_space_fp = add_space_addr;
+            }
 
-        uint64_t remove_space_addr = baseaddr + 0x495000;
-        remove_space_addr = hex_find_seq(remove_space_addr, remove_space_pattern);
-        if (remove_space_addr == 0x0) {
-            NSLog(@"[chunkwm-sa] failed to get pointer to removeSpace function..");
+            uint64_t remove_space_addr = baseaddr + 0x495000;
+            remove_space_addr = hex_find_seq(remove_space_addr, remove_space_pattern);
+            if (remove_space_addr == 0x0) {
+                NSLog(@"[chunkwm-sa] failed to get pointer to removeSpace function..");
+                remove_space_fp = 0;
+            } else {
+                NSLog(@"[chunkwm-sa] (0x%llx) removeSpace found at address 0x%llX (0x%llx)", baseaddr, remove_space_addr, remove_space_addr - baseaddr);
+                remove_space_fp = remove_space_addr;
+            }
+        } else if (os_version.minorVersion == 14) {
+            add_space_fp = baseaddr + 0x2a4f50;
             remove_space_fp = 0;
-        } else {
-            NSLog(@"[chunkwm-sa] (0x%llx) removeSpace found at address 0x%llX (0x%llx)", baseaddr, remove_space_addr, remove_space_addr - baseaddr);
-            remove_space_fp = remove_space_addr;
         }
 
         managed_space = objc_getClass("Dock.ManagedSpace");
