@@ -9,8 +9,8 @@ and its integration with chunkwm, as well as further instructions on how to inst
 **DISCLAIMER**: Use at your own discretion. I take no responsibility if anything should happen to your
 machine while testing or otherwise trying to install this extension.
 
-I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6), Sierra (10.12.6) and High Sierra (10.13.0) with the below instructions.
-(Features that interact with spaces only work on High Sierra)
+I have confirmed this to be working on my machine running MacOS El Capitan (10.11.6), Sierra (10.12.6), High Sierra (10.13.0) and Mojave (10.14 Beta) with the below instructions.
+(Features that interact with spaces only work on High Sierra and Mojave)
 
 CHWMInjector.osax is our scripting addition.
 
