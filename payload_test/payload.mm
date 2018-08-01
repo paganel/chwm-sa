@@ -218,8 +218,8 @@ static void init_instances()
                 remove_space_fp = remove_space_addr;
             }
         } else if (os_version.minorVersion == 14) {
-            add_space_fp = baseaddr + 0x296a80;
-            remove_space_fp = baseaddr + 0x3d4620;
+            add_space_fp = baseaddr + 0x27ef80;
+            remove_space_fp = baseaddr + 0x37fbd0;
         }
 
         managed_space = objc_getClass("Dock.ManagedSpace");
