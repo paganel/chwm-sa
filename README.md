@@ -33,7 +33,7 @@ csrutil disable
 
 Copy the generated `CHWMInjector.osax` to `/System/Library/ScriptingAdditions/`.
 
-Reboot into recovery mode and enable SIP.
+If you are running High Sierra or an earlier version, reboot into recovery mode and enable SIP.
 ```
 csrutil enable
 ```
