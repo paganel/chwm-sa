@@ -218,7 +218,8 @@ static void init_instances()
                 remove_space_fp = remove_space_addr;
             }
         } else if (os_version.minorVersion == 14) {
-            if (os_version.patchVersion == 1) {
+            if ((os_version.patchVersion == 1) ||
+                (os_version.patchVersion == 2)) {
                 add_space_fp = baseaddr + 0x289390;
                 remove_space_fp = baseaddr + 0x389ea0;
             } else {
