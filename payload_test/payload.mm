@@ -177,74 +177,93 @@ loc_5a14:
     return 0;
 }
 
-const char *ds_c_pattern = "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00";
-const char *add_space_pattern = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 38 4C 89 6D B0 49 89 FC 48 BB 01 00 00 00 00 00 00 C0 48 B9 01 00 00 00 00 00 00 80 49 BF F8 FF FF FF FF FF FF 00 49 8D 45 28 48 89 45 C0 4D 8B 75 28 41 80 7D 38 01 4C 89 65 C8";
-const char *remove_space_pattern = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 68 4C 89 45 80 48 89 4D C0 48 89 55 D0 48 89 F3 49 89 FC 49 BE 01 00 00 00 00 00 00 C0 49 89 DD E8 ?? ?? E9 FF 49 89 C7 4D 85 F7";
-static void init_instances()
+enum MacOS_Version {
+    MACOS_UNSUPPORTED = 0,
+    MACOS_HIGH_SIERRA = 1,
+    MACOS_MOJAVE      = 2,
+
+    MACOS_VERSION_COUNT
+};
+
+MacOS_Version get_macos_version()
 {
-    uint64_t baseaddr = static_base_address() + image_slide();
-
-    uint64_t ds_instance_addr = baseaddr + 0xe10;
-    ds_instance_addr = hex_find_seq(ds_instance_addr, ds_c_pattern);
-    if (ds_instance_addr == 0) {
-        NSLog(@"[chunkwm-sa] failed to get pointer to dock.spaces! space-switching will not work..");
-        ds_instance = nil;
-        add_space_fp = 0;
-        remove_space_fp = 0;
-    } else {
-        uint32_t offset = *(int32_t *)ds_instance_addr;
-        NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, ds_instance_addr + offset + 0x4, ds_instance_addr - baseaddr);
-        ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
-
-        NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
-        if (os_version.minorVersion == 13) {
-            uint64_t add_space_addr = baseaddr + 0x335000;
-            add_space_addr = hex_find_seq(add_space_addr, add_space_pattern);
-            if (add_space_addr == 0x0) {
-                NSLog(@"[chunkwm-sa] failed to get pointer to addSpace function..");
-                add_space_fp = 0;
-            } else {
-                NSLog(@"[chunkwm-sa] (0x%llx) addSpace found at address 0x%llX (0x%llx)", baseaddr, add_space_addr, add_space_addr - baseaddr);
-                add_space_fp = add_space_addr;
-            }
-
-            uint64_t remove_space_addr = baseaddr + 0x495000;
-            remove_space_addr = hex_find_seq(remove_space_addr, remove_space_pattern);
-            if (remove_space_addr == 0x0) {
-                NSLog(@"[chunkwm-sa] failed to get pointer to removeSpace function..");
-                remove_space_fp = 0;
-            } else {
-                NSLog(@"[chunkwm-sa] (0x%llx) removeSpace found at address 0x%llX (0x%llx)", baseaddr, remove_space_addr, remove_space_addr - baseaddr);
-                remove_space_fp = remove_space_addr;
-            }
-        } else if (os_version.minorVersion == 14) {
-            if ((os_version.patchVersion == 1) ||
-                (os_version.patchVersion == 2)) {
-                add_space_fp = baseaddr + 0x289390;
-                remove_space_fp = baseaddr + 0x389ea0;
-            } else {
-                add_space_fp = baseaddr + 0x2893c0;
-                remove_space_fp = baseaddr + 0x389ed0;
-            }
-        }
-
-        managed_space = objc_getClass("Dock.ManagedSpace");
+    NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
+    switch (os_version.minorVersion) {
+    case 14: return MACOS_MOJAVE;
+    case 13: return MACOS_HIGH_SIERRA;
+    default: return MACOS_UNSUPPORTED;
     }
 }
 
-/*
-static uint64_t get_method_imp(const char *name, SEL sel)
-{
-    Class c = objc_getClass(name);
-    return (uint64_t) method_getImplementation(class_getInstanceMethod(c, sel));
-}
+uint64_t dock_spaces_offset[MACOS_VERSION_COUNT] = {
+    [MACOS_HIGH_SIERRA] = 0xe10,
+    [MACOS_MOJAVE]      = 0x9a00
+};
 
-static void *get_ivar_pointer(id instance, const char *name)
+uint64_t add_space_offset[] = {
+    [MACOS_HIGH_SIERRA] = 0x335000,
+    [MACOS_MOJAVE]      = 0x27e500
+};
+
+uint64_t remove_space_offset[] = {
+    [MACOS_HIGH_SIERRA] = 0x495000,
+    [MACOS_MOJAVE]      = 0x37fb00
+};
+
+const char *dock_spaces_pattern[MACOS_VERSION_COUNT] =  {
+    [MACOS_HIGH_SIERRA] = "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00",
+    [MACOS_MOJAVE]      = "?? ?? ?? 00 49 8B 3C 24 48 8B 35 ?? E9 4C 00 44 89 BD 94 FE FF FF 44 89 FA 41 FF D5 48 89 C7 E8 45 0C 3D 00 48 ?? 85 40 FE FF FF 48 8B 3D ?? 40 4D 00 48 89 DE 41 FF D5 48 8B 35 ?? ?? 4C 00 31 D2 48 89 C7 41 FF D5 48 89 85 70 FE FF FF 49 8B 3C 24"
+};
+
+const char *add_space_pattern[MACOS_VERSION_COUNT] =  {
+    [MACOS_HIGH_SIERRA] = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 38 4C 89 6D B0 49 89 FC 48 BB 01 00 00 00 00 00 00 C0 48 B9 01 00 00 00 00 00 00 80 49 BF F8 FF FF FF FF FF FF 00 49 8D 45 28 48 89 45 C0 4D 8B 75 28 41 80 7D 38 01 4C 89 65 C8",
+    [MACOS_MOJAVE]      = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 18 48 89 7D C0 41 8A 5D 30 4C 89 6D C8 4D 8B 65 20 4C 89 E7 E8 8B 17 15 00 4C 89 E7 E8 0F 7E F3 FF 49 89 C6 4D 89 F7 80 FB 01 74 6E 4D 85 F6 0F 84 24 01 00 00 49 FF CE 0F 80 7E 02 00 00 48 BB 03 00 00 00 00 00 00 C0 31 F6 49 85 DC 40 0F 94 C6 4C 89 F7 4C 89 E2 E8 F4 7E 10 00 49 85 DC 0F 85 29 02 00 00 4F 8B 6C F4 20 4C 89 EF E8 92 14 15 00 48 8B 05 6F 8E 1C 00 48 89 C3 48 8B 08 49 23 4D 00 FF 91 80 00 00 00 88 45 D0 4C 89 EF E8 6A 14 15 00 F6 45 D0 01 74 08 4C 89 E7 E9 ED 00 00 00 4D 85 F6 49 89 DF 0F 84 AB 00 00 00 49 FF CE 0F 80 9E 00 00 00 48 B8 F8 FF FF FF FF FF FF 00 4C 21 E0 48 89 45 D0 48 B8 03 00 00 00 00 00 00 C0 49 85 C4 74 27 4C 89 E7 E8 C5 16 15 00 4C 89 F7 4C 89 E6 48 8D 15 64 11 F7 FF E8 8F C4 00 00 48 89 C3 4C 89 E7 E8 9C 16 15 00 EB 25 48 8B 05 7B 83 1C 00"
+};
+
+const char *remove_space_pattern[MACOS_VERSION_COUNT] =  {
+    [MACOS_HIGH_SIERRA] = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 68 4C 89 45 80 48 89 4D C0 48 89 55 D0 48 89 F3 49 89 FC 49 BE 01 00 00 00 00 00 00 C0 49 89 DD E8 ?? ?? E9 FF 49 89 C7 4D 85 F7",
+    [MACOS_MOJAVE]      = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 48 89 4D A0 49 89 D4 49 89 F7 49 89 FE 4D 89 FD E8 ?? ?? EF FF 48 89 C3 48 89 DF E8 ?? ?? ?? FF 48 83 F8 02 0F 8C 94 01 00 00 4C 89 7D A8 48 89 5D B8"
+};
+
+static void init_instances()
 {
-    Ivar ivar = class_getInstanceVariable(object_getClass(instance), name);
-    return ivar == NULL ? NULL : (__bridge uint8_t *)instance + ivar_getOffset(ivar);
+    MacOS_Version os_version = get_macos_version();
+    if (os_version == MACOS_UNSUPPORTED) {
+        NSLog(@"[chunkwm-sa] spaces functionality is only supported on macOS High Sierra and Mojave!");
+        return;
+    }
+
+    uint64_t baseaddr = static_base_address() + image_slide();
+    uint64_t ds_instance_addr = hex_find_seq(baseaddr + dock_spaces_offset[os_version], dock_spaces_pattern[os_version]);
+    if (ds_instance_addr == 0) {
+        NSLog(@"[chunkwm-sa] could not locate pointer to dock.spaces! spaces functionality will not work!");
+        return;
+    }
+
+    uint32_t offset = *(int32_t *)ds_instance_addr;
+    NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, ds_instance_addr + offset + 0x4, ds_instance_addr - baseaddr);
+    ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
+
+    uint64_t add_space_addr = hex_find_seq(baseaddr + add_space_offset[os_version], add_space_pattern[os_version]);
+    if (add_space_addr == 0x0) {
+        NSLog(@"[chunkwm-sa] failed to get pointer to addSpace function..");
+        add_space_fp = 0;
+    } else {
+        NSLog(@"[chunkwm-sa] (0x%llx) addSpace found at address 0x%llX (0x%llx)", baseaddr, add_space_addr, add_space_addr - baseaddr);
+        add_space_fp = add_space_addr;
+    }
+
+    uint64_t remove_space_addr = hex_find_seq(baseaddr + remove_space_offset[os_version], remove_space_pattern[os_version]);
+    if (remove_space_addr == 0x0) {
+        NSLog(@"[chunkwm-sa] failed to get pointer to removeSpace function..");
+        remove_space_fp = 0;
+    } else {
+        NSLog(@"[chunkwm-sa] (0x%llx) removeSpace found at address 0x%llX (0x%llx)", baseaddr, remove_space_addr, remove_space_addr - baseaddr);
+        remove_space_fp = remove_space_addr;
+    }
+
+    managed_space = objc_getClass("Dock.ManagedSpace");
 }
-*/
 
 static inline id get_ivar_value(id instance, const char *name)
 {
@@ -286,6 +305,12 @@ static inline id display_space_for_space_with_id(uint64_t space_id)
         }
     }
     return nil;
+}
+
+static inline id display_space_uuid(id display_space)
+{
+    id display_uuid = get_ivar_value(display_space, "displayUUID");
+    return display_uuid;
 }
 
 struct Token
