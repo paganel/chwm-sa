@@ -307,12 +307,6 @@ static inline id display_space_for_space_with_id(uint64_t space_id)
     return nil;
 }
 
-static inline id display_space_uuid(id display_space)
-{
-    id display_uuid = get_ivar_value(display_space, "displayUUID");
-    return display_uuid;
-}
-
 struct Token
 {
     const char *text;
