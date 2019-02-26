@@ -54,6 +54,8 @@ To set window position, send: `window_move <cgwindowid> <x> <y>`
 
 To set window shadow, send: `window_shadow <cgwindowid> <1 | 0>`
 
+To force disable shadow for the windows lifetime, send : `window_shadow_irreversible <cgwindowid>`
+
 To switch to a different space, bypassing animation, send: `space <cgsspaceid>`
 
 To create a new space on the active display, send: `space_create <focused_cgsspaceid_of_a_display>`

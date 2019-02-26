@@ -36,6 +36,8 @@ extern "C" void CGSHideSpaces(CGSConnectionID cid, CFArrayRef spaces);
 #define BUF_SIZE 256
 #define kCGSOnAllWorkspacesTagBit (1 << 11)
 #define kCGSNoShadowTagBit (1 << 3)
+extern "C" CGError CGSSetWindowShadowParameters(CGSConnectionID cid, CGWindowID wid, CGFloat standardDeviation, CGFloat density, int offsetX, int offsetY);
+extern "C" CGError CGSInvalidateWindowShadow(CGSConnectionID cid, CGWindowID wid);
 extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 
@@ -510,17 +512,14 @@ static void do_window_shadow(const char *message)
     } else {
         CGSSetWindowTags(_connection, wid, tags, 32);
     }
+    CGSInvalidateWindowShadow(_connection, wid);
+}
 
-    /*
-     * The restoring of the shadow doesn't get drawn until the window
-     * is either moved, focused or otherwise altered. We slightly flip
-     * the alpha state to trigger a redrawing after changing the flag.
-     */
-
-    float alpha = 0.0f;
-    CGSGetWindowAlpha(_connection, wid, &alpha);
-    CGSSetWindowAlpha(_connection, wid, alpha - 0.1f);
-    CGSSetWindowAlpha(_connection, wid, alpha);
+static void do_window_shadow_irreversible(const char *message)
+{
+    Token wid_token = get_token(&message);
+    uint32_t wid = token_to_uint32t(wid_token);
+    CGSSetWindowShadowParameters(_connection, wid, 0, 0, 0, 0);
 }
 
 static inline bool can_focus_space()
@@ -568,6 +567,8 @@ static void handle_message(const char *message)
         do_window_sticky(message);
     } else if (token_equals(token, "window_shadow")) {
         do_window_shadow(message);
+    } else if (token_equals(token, "window_shadow_irreversible")) {
+        do_window_shadow_irreversible(message);
     }
 }
 
