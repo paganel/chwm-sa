@@ -28,6 +28,7 @@ extern "C" CGError CGSSetWindowLevel(CGSConnectionID cid, uint32_t wid, int leve
 extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
 extern "C" void CGSManagedDisplaySetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref, uint64_t spid);
 extern "C" uint64_t CGSManagedDisplayGetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref);
+extern "C" uint64_t CGSGetActiveSpace(CGSConnectionID cid);
 extern "C" CFArrayRef CGSCopyManagedDisplaySpaces(const CGSConnectionID cid);
 extern "C" CFStringRef CGSCopyManagedDisplayForSpace(const CGSConnectionID cid, uint64_t spid);
 extern "C" void CGSShowSpaces(CGSConnectionID cid, CFArrayRef spaces);
@@ -45,6 +46,7 @@ static CGSConnectionID _connection;
 static id ds_instance;
 static uint64_t add_space_fp;
 static uint64_t remove_space_fp;
+static uint64_t move_space_fp;
 static Class managed_space;
 
 static socklen_t sin_size = sizeof(struct sockaddr);
@@ -179,64 +181,82 @@ loc_5a14:
     return 0;
 }
 
-enum MacOS_Version {
-    MACOS_UNSUPPORTED = 0,
-    MACOS_HIGH_SIERRA = 1,
-    MACOS_MOJAVE      = 2,
-
-    MACOS_VERSION_COUNT
-};
-
-MacOS_Version get_macos_version()
-{
-    NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
-    switch (os_version.minorVersion) {
-    case 14: return MACOS_MOJAVE;
-    case 13: return MACOS_HIGH_SIERRA;
-    default: return MACOS_UNSUPPORTED;
+uint64_t get_dock_spaces_offset(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return 0x8f00;
+        } else {
+            return 0x9a00;
+        }
+    } else if (os_version.minorVersion == 13) {
+        return 0xe10;
     }
+    return 0;
 }
 
-uint64_t dock_spaces_offset[MACOS_VERSION_COUNT] = {
-    [MACOS_HIGH_SIERRA] = 0xe10,
-    [MACOS_MOJAVE]      = 0x9a00
-};
+uint64_t get_add_space_offset(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        return 0x27e500;
+    } else if (os_version.minorVersion == 13) {
+        return 0x335000;
+    }
+    return 0;
+}
 
-uint64_t add_space_offset[] = {
-    [MACOS_HIGH_SIERRA] = 0x335000,
-    [MACOS_MOJAVE]      = 0x27e500
-};
+uint64_t get_remove_space_offset(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        return 0x37fb00;
+    } else if (os_version.minorVersion == 13) {
+        return 0x495000;
+    }
+    return 0;
+}
 
-uint64_t remove_space_offset[] = {
-    [MACOS_HIGH_SIERRA] = 0x495000,
-    [MACOS_MOJAVE]      = 0x37fb00
-};
+const char *get_dock_spaces_pattern(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        return "?? ?? ?? 00 49 8B 3C 24 48 8B 35 ?? ?? ?? 00 44 89 BD 94 FE FF FF 44 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 48 ?? 85 40 FE FF FF 48 8B 3D ?? ?? ?? 00 48 89 DE 41 FF D5 48 8B 35 ?? ?? ?? 00 31 D2 48 89 C7 41 FF D5 48 89 85 70 FE FF FF 49 8B 3C 24";
+    } else if (os_version.minorVersion == 13) {
+        return "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00";
+    }
+    return NULL;
+}
 
-const char *dock_spaces_pattern[MACOS_VERSION_COUNT] =  {
-    [MACOS_HIGH_SIERRA] = "?? ?? ?? 00 48 8B 38 48 8B B5 E0 FD FF FF 4C 8B BD B8 FE FF FF 4C 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 49 89 C5 4C 89 EF 48 8B B5 80 FE FF FF FF 15 ?? ?? ?? 00 48 89 C7 E8 ?? ?? ?? 00 48 89 C3 48 89 9D C8 FE FF FF 4C 89 EF 48 8B 05 ?? ?? ?? 00",
-    [MACOS_MOJAVE]      = "?? ?? ?? 00 49 8B 3C 24 48 8B 35 ?? E9 4C 00 44 89 BD 94 FE FF FF 44 89 FA 41 FF D5 48 89 C7 E8 45 0C 3D 00 48 ?? 85 40 FE FF FF 48 8B 3D ?? 40 4D 00 48 89 DE 41 FF D5 48 8B 35 ?? ?? 4C 00 31 D2 48 89 C7 41 FF D5 48 89 85 70 FE FF FF 49 8B 3C 24"
-};
+const char *get_add_space_pattern(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 78 49 BC 01 00 00 00 00 00 00 40 49 BE F8 FF FF FF FF FF FF 00 49 8D 5D 20 4C 89 6D B8 41 80 7D 30 01 48 89 7D C0 48 89 5D D0 75 32 49 89 FF 48 8D 75 80 31 D2 31 C9 48 89 DF E8 03 79 14 00 48 8B 1B 4C 85 E3 0F 85 CE 03 00 00 4D 89 E5 4C 21 F3 48 8B 43 10 48 89 45 C8 E9 B1 01 00 00 48 8D 75 80 31 D2 31 C9 48 89 DF E8 D4 78 14 00 4C 8B 33 4D 85 E6 4D 89 E5 0F 85 FF 03 00 00 4C 89 F0 48 B9 F8 FF FF FF FF FF FF 00 48 21 C8 4C 8B 60 10 4C 89 F7 E8 BB 78 14 00 4D 85 E4 0F 84 39 01 00 00 4D 89 E7 49 FF CF 0F 80 EA 04 00 00 4C 89 65 C8 48 BB 03 00 00 00 00 00 00 C0 31 F6 49 85 DE 40 0F 94 C6 4C 89 FF 4C 89 F2 E8 D0 F0 00 00 49 85 DE";
+        } else {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 18 48 89 7D C0 41 8A 5D 30 4C 89 6D C8 4D 8B 65 20 4C 89 E7 E8 8B 17 15 00 4C 89 E7 E8 0F 7E F3 FF 49 89 C6 4D 89 F7 80 FB 01 74 6E 4D 85 F6 0F 84 24 01 00 00 49 FF CE 0F 80 7E 02 00 00 48 BB 03 00 00 00 00 00 00 C0 31 F6 49 85 DC 40 0F 94 C6 4C 89 F7 4C 89 E2 E8 F4 7E 10 00 49 85 DC 0F 85 29 02 00 00 4F 8B 6C F4 20 4C 89 EF E8 92 14 15 00 48 8B 05 6F 8E 1C 00 48 89 C3 48 8B 08 49 23 4D 00 FF 91 80 00 00 00 88 45 D0 4C 89 EF E8 6A 14 15 00 F6 45 D0 01 74 08 4C 89 E7 E9 ED 00 00 00 4D 85 F6 49 89 DF 0F 84 AB 00 00 00 49 FF CE 0F 80 9E 00 00 00 48 B8 F8 FF FF FF FF FF FF 00 4C 21 E0 48 89 45 D0 48 B8 03 00 00 00 00 00 00 C0 49 85 C4 74 27 4C 89 E7 E8 C5 16 15 00 4C 89 F7 4C 89 E6 48 8D 15 64 11 F7 FF E8 8F C4 00 00 48 89 C3 4C 89 E7 E8 9C 16 15 00 EB 25 48 8B 05 7B 83 1C 00";
+        }
+    } else if (os_version.minorVersion == 13) {
+        return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 38 4C 89 6D B0 49 89 FC 48 BB 01 00 00 00 00 00 00 C0 48 B9 01 00 00 00 00 00 00 80 49 BF F8 FF FF FF FF FF FF 00 49 8D 45 28 48 89 45 C0 4D 8B 75 28 41 80 7D 38 01 4C 89 65 C8";
+    }
+    return NULL;
+}
 
-const char *add_space_pattern[MACOS_VERSION_COUNT] =  {
-    [MACOS_HIGH_SIERRA] = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 38 4C 89 6D B0 49 89 FC 48 BB 01 00 00 00 00 00 00 C0 48 B9 01 00 00 00 00 00 00 80 49 BF F8 FF FF FF FF FF FF 00 49 8D 45 28 48 89 45 C0 4D 8B 75 28 41 80 7D 38 01 4C 89 65 C8",
-    [MACOS_MOJAVE]      = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 18 48 89 7D C0 41 8A 5D 30 4C 89 6D C8 4D 8B 65 20 4C 89 E7 E8 8B 17 15 00 4C 89 E7 E8 0F 7E F3 FF 49 89 C6 4D 89 F7 80 FB 01 74 6E 4D 85 F6 0F 84 24 01 00 00 49 FF CE 0F 80 7E 02 00 00 48 BB 03 00 00 00 00 00 00 C0 31 F6 49 85 DC 40 0F 94 C6 4C 89 F7 4C 89 E2 E8 F4 7E 10 00 49 85 DC 0F 85 29 02 00 00 4F 8B 6C F4 20 4C 89 EF E8 92 14 15 00 48 8B 05 6F 8E 1C 00 48 89 C3 48 8B 08 49 23 4D 00 FF 91 80 00 00 00 88 45 D0 4C 89 EF E8 6A 14 15 00 F6 45 D0 01 74 08 4C 89 E7 E9 ED 00 00 00 4D 85 F6 49 89 DF 0F 84 AB 00 00 00 49 FF CE 0F 80 9E 00 00 00 48 B8 F8 FF FF FF FF FF FF 00 4C 21 E0 48 89 45 D0 48 B8 03 00 00 00 00 00 00 C0 49 85 C4 74 27 4C 89 E7 E8 C5 16 15 00 4C 89 F7 4C 89 E6 48 8D 15 64 11 F7 FF E8 8F C4 00 00 48 89 C3 4C 89 E7 E8 9C 16 15 00 EB 25 48 8B 05 7B 83 1C 00"
-};
-
-const char *remove_space_pattern[MACOS_VERSION_COUNT] =  {
-    [MACOS_HIGH_SIERRA] = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 68 4C 89 45 80 48 89 4D C0 48 89 55 D0 48 89 F3 49 89 FC 49 BE 01 00 00 00 00 00 00 C0 49 89 DD E8 ?? ?? E9 FF 49 89 C7 4D 85 F7",
-    [MACOS_MOJAVE]      = "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 48 89 4D A0 49 89 D4 49 89 F7 49 89 FE 4D 89 FD E8 ?? ?? EF FF 48 89 C3 48 89 DF E8 ?? ?? ?? FF 48 83 F8 02 0F 8C 94 01 00 00 4C 89 7D A8 48 89 5D B8"
-};
+const char *get_remove_space_pattern(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 81 EC 18 01 00 00 48 89 4D B8 48 89 55 90 49 89 F7 48 89 7D B0 48 BB F8 FF FF FF FF FF FF 00 49 89 F5 E8 FB 8B EF FF 49 89 C4 48 B8 01 00 00 00 00 00 00 40 49 85 C4 0F 85 6F 06 00 00 4C 21 E3 4C 8B 73 10 49 83 FE 02 0F 8C 08 03 00 00 4C 89 7D 80 4C 89 65 98 48 8D 05 E5 A6 14 00 48 8B 00 48 8B 5D B0 48 8B 0C 03 48 89 8D 70 FF FF FF 4C 8B 64 03 08 4C 89 65 C0 4C 8D 35 83 8E 15 00 48 8D B5 F0 FE FF FF 31 D2 31 C9 4C 89 F7 E8 C2 0E 04 00 4D 8B 3E 4C 8B 35 5E 92 13 00 4C 89 E7 E8 C2 0E 04 00 4C 89 FF 4C 89 F6 48 89 DA E8 F6 0B 04 00 4C 8B 35 E1 FA 14 00";
+        } else {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 48 89 4D A0 49 89 D4 49 89 F7 49 89 FE 4D 89 FD E8 ?? ?? EF FF 48 89 C3 48 89 DF E8 ?? ?? ?? FF 48 83 F8 02 0F 8C 94 01 00 00 4C 89 7D A8 48 89 5D B8";
+        }
+    } else if (os_version.minorVersion == 13) {
+        return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 68 4C 89 45 80 48 89 4D C0 48 89 55 D0 48 89 F3 49 89 FC 49 BE 01 00 00 00 00 00 00 C0 49 89 DD E8 ?? ?? E9 FF 49 89 C7 4D 85 F7";
+    }
+    return NULL;
+}
 
 static void init_instances()
 {
-    MacOS_Version os_version = get_macos_version();
-    if (os_version == MACOS_UNSUPPORTED) {
+    NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
+    if (os_version.minorVersion != 13 && os_version.minorVersion != 14) {
         NSLog(@"[chunkwm-sa] spaces functionality is only supported on macOS High Sierra and Mojave!");
         return;
     }
 
     uint64_t baseaddr = static_base_address() + image_slide();
-    uint64_t ds_instance_addr = hex_find_seq(baseaddr + dock_spaces_offset[os_version], dock_spaces_pattern[os_version]);
+    uint64_t ds_instance_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), get_dock_spaces_pattern(os_version));
     if (ds_instance_addr == 0) {
         NSLog(@"[chunkwm-sa] could not locate pointer to dock.spaces! spaces functionality will not work!");
         return;
@@ -246,7 +266,7 @@ static void init_instances()
     NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, ds_instance_addr + offset + 0x4, ds_instance_addr - baseaddr);
     ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
 
-    uint64_t add_space_addr = hex_find_seq(baseaddr + add_space_offset[os_version], add_space_pattern[os_version]);
+    uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), get_add_space_pattern(os_version));
     if (add_space_addr == 0x0) {
         NSLog(@"[chunkwm-sa] failed to get pointer to addSpace function..");
         add_space_fp = 0;
@@ -255,7 +275,7 @@ static void init_instances()
         add_space_fp = add_space_addr;
     }
 
-    uint64_t remove_space_addr = hex_find_seq(baseaddr + remove_space_offset[os_version], remove_space_pattern[os_version]);
+    uint64_t remove_space_addr = hex_find_seq(baseaddr + get_remove_space_offset(os_version), get_remove_space_pattern(os_version));
     if (remove_space_addr == 0x0) {
         NSLog(@"[chunkwm-sa] failed to get pointer to removeSpace function..");
         remove_space_fp = 0;
@@ -263,6 +283,17 @@ static void init_instances()
         NSLog(@"[chunkwm-sa] (0x%llx) removeSpace found at address 0x%llX (0x%llx)", baseaddr, remove_space_addr, remove_space_addr - baseaddr);
         remove_space_fp = remove_space_addr;
     }
+
+#if 0
+    uint64_t move_space_addr = hex_find_seq(baseaddr + 0x36f500, "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 4D 89 EC 41 89 D5 49 89 ?? ?? 89 FB 48 8B 05 ?? ?? ?? 00 4C 8B 3C 03 4C 89 ?? 4C 89 E6 E8 ?? CC 00 00 48 89 55 ?? 48 89 45 ?? 48 85 C0 0F 84 ?? ?? 00 00");
+    if (move_space_addr == 0x0) {
+        NSLog(@"[chunkwm-sa] failed to get pointer to moveSpace function..");
+        move_space_fp = 0;
+    } else {
+        NSLog(@"[chunkwm-sa] (0x%llx) moveSpace found at address 0x%llX (0x%llx)", baseaddr, move_space_addr, move_space_addr - baseaddr);
+        move_space_fp = move_space_addr;
+    }
+#endif
 
     managed_space = objc_getClass("Dock.ManagedSpace");
 }
@@ -384,6 +415,35 @@ static Token get_token(const char **message)
 
     return token;
 }
+
+#if 0
+#define asm__call_move_space(v0,v1,v2,v3,func) \
+        __asm__("movq %0, %%rdi;""movq %1, %%rsi;""movq %2, %%rdx;""movq %3, %%r13;""callq *%4;" : :"r"(v0), "r"(v1), "r"(v2), "r"(v3), "r"(func) :"%rdi", "%rsi", "%rdx", "%r13");
+static void do_space_move(const char *message)
+{
+    Token token = get_token(&message);
+    uint64_t after_space_id = token_to_uint64t(token);
+
+    CFStringRef dest_display = CGSCopyManagedDisplayForSpace(_connection, after_space_id);
+    id after_space = space_for_display_with_id(dest_display, after_space_id);
+
+    uint64_t space_to_move_id = CGSGetActiveSpace(_connection);
+    CFStringRef source_display = CGSCopyManagedDisplayForSpace(_connection, space_to_move_id);
+    id space_to_move = space_for_display_with_id(source_display, space_to_move_id);
+
+    asm__call_move_space(space_to_move, after_space, dest_display, ds_instance, move_space_fp);
+
+    CFRelease(source_display);
+    CFRelease(dest_display);
+
+/* :: DPDesktopPictureManager
+    uint64_t baseaddr = static_base_address() + image_slide();
+    uint64_t dppm_addr = baseaddr + 0x500ac0;
+    id dppm = [(*(id *)(dppm_addr)) retain];
+    id r = objc_msgSend(dppm, @selector(removeSpace:), space_to_move);
+*/
+}
+#endif
 
 typedef void (*remove_space_call)(id space, id display_space, id ds_instance, uint64_t space_id1, uint64_t space_id2);
 static void do_space_destroy(const char *message)
@@ -537,6 +597,13 @@ static inline bool can_destroy_space()
     return ds_instance != nil && remove_space_fp != 0;
 }
 
+#if 0
+static inline bool can_move_space()
+{
+    return ds_instance != nil && move_space_fp != 0;
+}
+#endif
+
 static void handle_message(const char *message)
 {
     /*
@@ -555,6 +622,11 @@ static void handle_message(const char *message)
     } else if (token_equals(token, "space_destroy")) {
         if (!can_destroy_space()) return;
         do_space_destroy(message);
+#if 0
+    } else if (token_equals(token, "space_move")) {
+        if (!can_move_space()) return;
+        do_space_move(message);
+#endif
     } else if (token_equals(token, "window_move")) {
         do_window_move(message);
     } else if (token_equals(token, "window_alpha")) {
