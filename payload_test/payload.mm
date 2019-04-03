@@ -28,7 +28,6 @@ extern "C" CGError CGSSetWindowLevel(CGSConnectionID cid, uint32_t wid, int leve
 extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
 extern "C" void CGSManagedDisplaySetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref, uint64_t spid);
 extern "C" uint64_t CGSManagedDisplayGetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref);
-extern "C" uint64_t CGSGetActiveSpace(CGSConnectionID cid);
 extern "C" CFArrayRef CGSCopyManagedDisplaySpaces(const CGSConnectionID cid);
 extern "C" CFStringRef CGSCopyManagedDisplayForSpace(const CGSConnectionID cid, uint64_t spid);
 extern "C" void CGSShowSpaces(CGSConnectionID cid, CFArrayRef spaces);
@@ -41,12 +40,16 @@ extern "C" CGError CGSSetWindowShadowParameters(CGSConnectionID cid, CGWindowID 
 extern "C" CGError CGSInvalidateWindowShadow(CGSConnectionID cid, CGWindowID wid);
 extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
+extern "C" CGError CGSGetWindowOwner(int cid, uint32_t wid, int *window_cid);
+extern "C" CGError CGSConnectionGetPID(const int cid, pid_t *pid);
 
 static CGSConnectionID _connection;
-static id ds_instance;
+static id dock_spaces;
+static id dp_desktop_picture_manager;
 static uint64_t add_space_fp;
 static uint64_t remove_space_fp;
 static uint64_t move_space_fp;
+static uint64_t set_front_window_fp;
 static Class managed_space;
 
 static socklen_t sin_size = sizeof(struct sockaddr);
@@ -194,6 +197,17 @@ uint64_t get_dock_spaces_offset(NSOperatingSystemVersion os_version) {
     return 0;
 }
 
+uint64_t get_dppm_offset(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return 0x4e64f0;
+        } else {
+            return 0x500ac0;
+        }
+    }
+    return 0;
+}
+
 uint64_t get_add_space_offset(NSOperatingSystemVersion os_version) {
     if (os_version.minorVersion == 14) {
         return 0x27e500;
@@ -208,6 +222,17 @@ uint64_t get_remove_space_offset(NSOperatingSystemVersion os_version) {
         return 0x37fb00;
     } else if (os_version.minorVersion == 13) {
         return 0x495000;
+    }
+    return 0;
+}
+
+uint64_t get_move_space_offset(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return 0x37db10;
+        } else {
+            return 0x36f500;
+        }
     }
     return 0;
 }
@@ -247,6 +272,17 @@ const char *get_remove_space_pattern(NSOperatingSystemVersion os_version) {
     return NULL;
 }
 
+const char *get_move_space_pattern(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 81 EC A8 00 00 00 41 89 D7 48 89 75 D0 48 89 FB 4C 8D 35 03 A2 15 00 49 8B 06 4C 8B 24 07 4C 89 E7 4C 89 6D A8 4C 89 EE E8 65 CC 00 00 48 89 55 C0 48 85 C0 0F 84 89 00 00 00 48 89 5D B8 48 89 45 C8 48 8D 1D 6E 85 16 00 48 8D B5 38 FF FF FF 31 D2 31 C9 48 89 DF E8 C8 09 05 00 80 3B 01 75 1C 4C 8B 7D C8 4C 89 FF 48 8B 75 D0 4C 8B 75 C0 4D 89 F5 E8 7A F5 F0 FF E9 6E 05 00 00 48 8B 5D D0 48 85 DB 74 44 49 8B 06 4C 8B 34 03 48 89 DF E8 FB 06 05 00 4C 89 F7 48 8B 75 A8 E8 31 CD 00 00 49 89 C7 48 89 DF E8 DE 06 05 00 4D 85 FF 75 44 48 8B 7D C0 E8 8A 0A 05 00 48 8B 7D C8 E8 C7 06 05 00";
+        } else {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 4D 89 EC 41 89 D5 49 89 ?? ?? 89 FB 48 8B 05 ?? ?? ?? 00 4C 8B 3C 03 4C 89 ?? 4C 89 E6 E8 ?? CC 00 00 48 89 55 ?? 48 89 45 ?? 48 85 C0 0F 84 ?? ?? 00 00";
+        }
+    }
+    return NULL;
+}
+
 static void init_instances()
 {
     NSOperatingSystemVersion os_version = [[NSProcessInfo processInfo] operatingSystemVersion];
@@ -256,15 +292,25 @@ static void init_instances()
     }
 
     uint64_t baseaddr = static_base_address() + image_slide();
-    uint64_t ds_instance_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), get_dock_spaces_pattern(os_version));
-    if (ds_instance_addr == 0) {
+    uint64_t dock_spaces_addr = hex_find_seq(baseaddr + get_dock_spaces_offset(os_version), get_dock_spaces_pattern(os_version));
+    if (dock_spaces_addr == 0) {
         NSLog(@"[chunkwm-sa] could not locate pointer to dock.spaces! spaces functionality will not work!");
         return;
     }
 
-    uint32_t offset = *(int32_t *)ds_instance_addr;
-    NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, ds_instance_addr + offset + 0x4, ds_instance_addr - baseaddr);
-    ds_instance = [(*(id *)(ds_instance_addr + offset + 0x4)) retain];
+    uint32_t offset = *(int32_t *)dock_spaces_addr;
+    NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, dock_spaces_addr + offset + 0x4, dock_spaces_addr - baseaddr);
+    dock_spaces = [(*(id *)(dock_spaces_addr + offset + 0x4)) retain];
+
+    // TODO(koekeishiya): replace version specific offset with memory pattern to locate
+    uint64_t dppm_addr = baseaddr + get_dppm_offset(os_version);
+    if (dppm_addr != baseaddr) {
+        NSLog(@"[chunkwm-sa] (0x%llx) dppm found at address 0x%llX (0x%llx)", baseaddr, dppm_addr, dppm_addr - baseaddr);
+        dp_desktop_picture_manager = [(*(id *)(dppm_addr)) retain];
+    } else {
+        NSLog(@"[chunkwm-sa] could not locate pointer to dppm! moving spaces will not work!");
+        dp_desktop_picture_manager = nil;
+    }
 
     uint64_t add_space_addr = hex_find_seq(baseaddr + get_add_space_offset(os_version), get_add_space_pattern(os_version));
     if (add_space_addr == 0x0) {
@@ -284,8 +330,7 @@ static void init_instances()
         remove_space_fp = remove_space_addr;
     }
 
-#if 0
-    uint64_t move_space_addr = hex_find_seq(baseaddr + 0x36f500, "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 4D 89 EC 41 89 D5 49 89 ?? ?? 89 FB 48 8B 05 ?? ?? ?? 00 4C 8B 3C 03 4C 89 ?? 4C 89 E6 E8 ?? CC 00 00 48 89 55 ?? 48 89 45 ?? 48 85 C0 0F 84 ?? ?? 00 00");
+    uint64_t move_space_addr = hex_find_seq(baseaddr + get_move_space_offset(os_version), get_move_space_pattern(os_version));
     if (move_space_addr == 0x0) {
         NSLog(@"[chunkwm-sa] failed to get pointer to moveSpace function..");
         move_space_fp = 0;
@@ -293,51 +338,17 @@ static void init_instances()
         NSLog(@"[chunkwm-sa] (0x%llx) moveSpace found at address 0x%llX (0x%llx)", baseaddr, move_space_addr, move_space_addr - baseaddr);
         move_space_fp = move_space_addr;
     }
-#endif
+
+    uint64_t set_front_window_addr = hex_find_seq(baseaddr + 0x57500, "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 58 48 8B 05 15 C8 3E 00 48 8B 00 48 89 45 D0 85 F6 0F 84 0A 02 00 00 41 89 F5 49 89 FE 49 89 FF 49 C1 EF 20 48 8D 75 AF C6 06 00 E8 7D 16 03 00 48 8B 3D 56 C9 3E 00 BE 01 00 00 00 E8 B6 6C 37 00 84 C0 74 59 0F B6 5D AF");
+    if (set_front_window_addr == 0x0) {
+        NSLog(@"[chunkwm-sa] failed to get pointer to setFrontWindow function..");
+        set_front_window_fp = 0;
+    } else {
+        NSLog(@"[chunkwm-sa] (0x%llx) setFrontWindow found at address 0x%llX (0x%llx)", baseaddr, set_front_window_addr, set_front_window_addr - baseaddr);
+        set_front_window_fp = set_front_window_addr;
+    }
 
     managed_space = objc_getClass("Dock.ManagedSpace");
-}
-
-static inline id get_ivar_value(id instance, const char *name)
-{
-    id result = nil;
-    object_getInstanceVariable(instance, name, (void **) &result);
-    return result;
-}
-
-static inline void set_ivar_value(id instance, const char *name, id value)
-{
-    object_setInstanceVariable(instance, name, value);
-}
-
-static inline uint64_t get_space_id(id space)
-{
-    return (uint64_t) objc_msgSend(space, @selector(spid));
-}
-
-static inline id space_for_display_with_id(CFStringRef display_uuid, uint64_t space_id)
-{
-    NSArray *spaces_for_display = (NSArray *) objc_msgSend(ds_instance, @selector(spacesForDisplay:), display_uuid);
-    for (id space in spaces_for_display) {
-        if (space_id == get_space_id(space)) {
-            return space;
-        }
-    }
-    return nil;
-}
-
-static inline id display_space_for_space_with_id(uint64_t space_id)
-{
-    NSArray *display_spaces = get_ivar_value(ds_instance, "_displaySpaces");
-    if (display_spaces != nil) {
-        for (id display_space in display_spaces) {
-            id display_source_space = get_ivar_value(display_space, "_currentSpace");
-            if (get_space_id(display_source_space) == space_id) {
-                return display_space;
-            }
-        }
-    }
-    return nil;
 }
 
 struct Token
@@ -416,44 +427,98 @@ static Token get_token(const char **message)
     return token;
 }
 
-#if 0
+static inline id get_ivar_value(id instance, const char *name)
+{
+    id result = nil;
+    object_getInstanceVariable(instance, name, (void **) &result);
+    return result;
+}
+
+static inline void set_ivar_value(id instance, const char *name, id value)
+{
+    object_setInstanceVariable(instance, name, value);
+}
+
+static inline uint64_t get_space_id(id space)
+{
+    return (uint64_t) objc_msgSend(space, @selector(spid));
+}
+
+static inline id space_for_display_with_id(CFStringRef display_uuid, uint64_t space_id)
+{
+    NSArray *spaces_for_display = (NSArray *) objc_msgSend(dock_spaces, @selector(spacesForDisplay:), display_uuid);
+    for (id space in spaces_for_display) {
+        if (space_id == get_space_id(space)) {
+            return space;
+        }
+    }
+    return nil;
+}
+
+static inline id display_space_for_space_with_id(uint64_t space_id)
+{
+    NSArray *display_spaces = get_ivar_value(dock_spaces, "_displaySpaces");
+    if (display_spaces != nil) {
+        for (id display_space in display_spaces) {
+            id display_source_space = get_ivar_value(display_space, "_currentSpace");
+            if (get_space_id(display_source_space) == space_id) {
+                return display_space;
+            }
+        }
+    }
+    return nil;
+}
+
 #define asm__call_move_space(v0,v1,v2,v3,func) \
         __asm__("movq %0, %%rdi;""movq %1, %%rsi;""movq %2, %%rdx;""movq %3, %%r13;""callq *%4;" : :"r"(v0), "r"(v1), "r"(v2), "r"(v3), "r"(func) :"%rdi", "%rsi", "%rdx", "%r13");
 static void do_space_move(const char *message)
 {
-    Token token = get_token(&message);
-    uint64_t after_space_id = token_to_uint64t(token);
+    Token source_token = get_token(&message);
+    uint64_t source_space_id = token_to_uint64t(source_token);
 
-    CFStringRef dest_display = CGSCopyManagedDisplayForSpace(_connection, after_space_id);
-    id after_space = space_for_display_with_id(dest_display, after_space_id);
+    Token dest_token = get_token(&message);
+    uint64_t dest_space_id = token_to_uint64t(dest_token);
 
-    uint64_t space_to_move_id = CGSGetActiveSpace(_connection);
-    CFStringRef source_display = CGSCopyManagedDisplayForSpace(_connection, space_to_move_id);
-    id space_to_move = space_for_display_with_id(source_display, space_to_move_id);
+    CFStringRef source_display_uuid = CGSCopyManagedDisplayForSpace(_connection, source_space_id);
+    id source_space = space_for_display_with_id(source_display_uuid, source_space_id);
+    id source_display_space = display_space_for_space_with_id(source_space_id);
 
-    asm__call_move_space(space_to_move, after_space, dest_display, ds_instance, move_space_fp);
+    CFStringRef dest_display_uuid = CGSCopyManagedDisplayForSpace(_connection, dest_space_id);
+    id dest_space = space_for_display_with_id(dest_display_uuid, dest_space_id);
+    unsigned dest_display_id = ((unsigned (*)(id, SEL, id)) objc_msgSend)(dock_spaces, @selector(displayIDForSpace:), dest_space);
+    id dest_display_space = display_space_for_space_with_id(dest_space_id);
 
-    CFRelease(source_display);
-    CFRelease(dest_display);
+    volatile bool __block is_finished = false;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0), dispatch_get_main_queue(), ^{
+        asm__call_move_space(source_space, dest_space, dest_display_uuid, dock_spaces, move_space_fp);
+        objc_msgSend(dp_desktop_picture_manager, @selector(moveSpace:toDisplay:displayUUID:), source_space, dest_display_id, dest_display_uuid);
+        is_finished = true;
+    });
+    while (!is_finished) { /* maybe spin lock */ }
 
-/* :: DPDesktopPictureManager
-    uint64_t baseaddr = static_base_address() + image_slide();
-    uint64_t dppm_addr = baseaddr + 0x500ac0;
-    id dppm = [(*(id *)(dppm_addr)) retain];
-    id r = objc_msgSend(dppm, @selector(removeSpace:), space_to_move);
-*/
+    uint64_t new_source_space_id = CGSManagedDisplayGetCurrentSpace(_connection, source_display_uuid);
+    id new_source_space = space_for_display_with_id(source_display_uuid, new_source_space_id);
+    set_ivar_value(source_display_space, "_currentSpace", [new_source_space retain]);
+
+    NSArray *ns_dest_monitor_space = @[ @(dest_space_id) ];
+    CGSHideSpaces(_connection, (__bridge CFArrayRef) ns_dest_monitor_space);
+    CGSManagedDisplaySetCurrentSpace(_connection, dest_display_uuid, source_space_id);
+    set_ivar_value(dest_display_space, "_currentSpace", [source_space retain]);
+    [ns_dest_monitor_space release];
+
+    CFRelease(source_display_uuid);
+    CFRelease(dest_display_uuid);
 }
-#endif
 
-typedef void (*remove_space_call)(id space, id display_space, id ds_instance, uint64_t space_id1, uint64_t space_id2);
+typedef void (*remove_space_call)(id space, id display_space, id dock_spaces, uint64_t space_id1, uint64_t space_id2);
 static void do_space_destroy(const char *message)
 {
     Token space_id_token = get_token(&message);
     uint64_t space_id = token_to_uint64t(space_id_token);
     CFStringRef display_uuid = CGSCopyManagedDisplayForSpace(_connection, space_id);
-    id space = objc_msgSend(ds_instance, @selector(currentSpaceforDisplayUUID:), display_uuid);
+    id space = objc_msgSend(dock_spaces, @selector(currentSpaceforDisplayUUID:), display_uuid);
     id display_space = display_space_for_space_with_id(space_id);
-    ((remove_space_call) remove_space_fp)(space, display_space, ds_instance, space_id, space_id);
+    ((remove_space_call) remove_space_fp)(space, display_space, dock_spaces, space_id, space_id);
     uint64_t dest_space_id = CGSManagedDisplayGetCurrentSpace(_connection, display_uuid);
     id dest_space = space_for_display_with_id(display_uuid, dest_space_id);
     set_ivar_value(display_space, "_currentSpace", [dest_space retain]);
@@ -482,7 +547,7 @@ static void do_space_change(const char *message)
     uint64_t dest_space_id = token_to_uint64t(token);
     if (dest_space_id) {
         CFStringRef dest_display = CGSCopyManagedDisplayForSpace(_connection, dest_space_id);
-        id source_space = objc_msgSend(ds_instance, @selector(currentSpaceforDisplayUUID:), dest_display);
+        id source_space = objc_msgSend(dock_spaces, @selector(currentSpaceforDisplayUUID:), dest_display);
         uint64_t source_space_id = get_space_id(source_space);
 
         if (source_space_id != dest_space_id) {
@@ -560,6 +625,23 @@ static void do_window_sticky(const char *message)
     }
 }
 
+typedef void (*focus_window_call)(ProcessSerialNumber psn, uint32_t wid);
+static void do_window_focus(const char *message)
+{
+    int window_connection;
+    pid_t window_pid;
+    ProcessSerialNumber window_psn;
+
+    Token wid_token = get_token(&message);
+    uint32_t window_id = token_to_uint32t(wid_token);
+
+    CGSGetWindowOwner(_connection, window_id, &window_connection);
+    CGSConnectionGetPID(window_connection, &window_pid);
+    GetProcessForPID(window_pid, &window_psn);
+
+    ((focus_window_call) set_front_window_fp)(window_psn, window_id);
+}
+
 static void do_window_shadow(const char *message)
 {
     Token wid_token = get_token(&message);
@@ -584,25 +666,28 @@ static void do_window_shadow_irreversible(const char *message)
 
 static inline bool can_focus_space()
 {
-    return ds_instance != nil;
+    return dock_spaces != nil;
 }
 
 static inline bool can_create_space()
 {
-    return ds_instance != nil && add_space_fp != 0;
+    return dock_spaces != nil && add_space_fp != 0;
 }
 
 static inline bool can_destroy_space()
 {
-    return ds_instance != nil && remove_space_fp != 0;
+    return dock_spaces != nil && remove_space_fp != 0;
 }
 
-#if 0
 static inline bool can_move_space()
 {
-    return ds_instance != nil && move_space_fp != 0;
+    return dock_spaces != nil && dp_desktop_picture_manager != nil && move_space_fp != 0;
 }
-#endif
+
+static inline bool can_focus_window()
+{
+    return set_front_window_fp != 0;
+}
 
 static void handle_message(const char *message)
 {
@@ -622,11 +707,9 @@ static void handle_message(const char *message)
     } else if (token_equals(token, "space_destroy")) {
         if (!can_destroy_space()) return;
         do_space_destroy(message);
-#if 0
     } else if (token_equals(token, "space_move")) {
         if (!can_move_space()) return;
         do_space_move(message);
-#endif
     } else if (token_equals(token, "window_move")) {
         do_window_move(message);
     } else if (token_equals(token, "window_alpha")) {
@@ -637,6 +720,9 @@ static void handle_message(const char *message)
         do_window_level(message);
     } else if (token_equals(token, "window_sticky")) {
         do_window_sticky(message);
+    } else if (token_equals(token, "window_focus")) {
+        if (!can_focus_window()) return;
+        do_window_focus(message);
     } else if (token_equals(token, "window_shadow")) {
         do_window_shadow(message);
     } else if (token_equals(token, "window_shadow_irreversible")) {
