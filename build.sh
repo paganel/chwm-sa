@@ -15,10 +15,7 @@ cd sa_core
 cd ..
 cp sa_core/bin/CHWMInjector bin/CHWMInjector.osax/Contents/MacOS/
 
-cd payload_test
+cd payload
 ./build.sh
 cd ..
-cp -r payload_test/bin/chunkwm-sa.bundle bin/CHWMInjector.osax/Contents/Resources/
-
-codesign -f -s - "bin/CHWMInjector.osax/Contents/MacOS/CHWMInjector"
-codesign -f -s - "bin/CHWMInjector.osax/Contents/Resources/chunkwm-sa.bundle/Contents/MacOS/chunkwm-sa"
+cp -r payload/bin/chunkwm-sa.bundle bin/CHWMInjector.osax/Contents/Resources/

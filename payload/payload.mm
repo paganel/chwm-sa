@@ -625,6 +625,8 @@ static void do_window_sticky(const char *message)
     }
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 typedef void (*focus_window_call)(ProcessSerialNumber psn, uint32_t wid);
 static void do_window_focus(const char *message)
 {
@@ -641,6 +643,7 @@ static void do_window_focus(const char *message)
 
     ((focus_window_call) set_front_window_fp)(window_psn, window_id);
 }
+#pragma clang diagnostic pop
 
 static void do_window_shadow(const char *message)
 {
