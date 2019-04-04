@@ -19,31 +19,32 @@
 #include <string.h>
 #include <stdio.h>
 
-typedef int CGSConnectionID;
-extern "C" CGSConnectionID CGSMainConnectionID(void);
-extern "C" CGError CGSSetWindowAlpha(CGSConnectionID cid, uint32_t wid, float alpha);
-extern "C" CGError CGSGetWindowAlpha(CGSConnectionID cid, uint32_t wid, float *out_alpha);
-extern "C" CGError CGSSetWindowListAlpha(CGSConnectionID cid, const uint32_t *window_list, int window_count, float alpha, float duration);
-extern "C" CGError CGSSetWindowLevel(CGSConnectionID cid, uint32_t wid, int level);
-extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
-extern "C" void CGSManagedDisplaySetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref, uint64_t spid);
-extern "C" uint64_t CGSManagedDisplayGetCurrentSpace(CGSConnectionID cid, CFStringRef display_ref);
-extern "C" CFArrayRef CGSCopyManagedDisplaySpaces(const CGSConnectionID cid);
-extern "C" CFStringRef CGSCopyManagedDisplayForSpace(const CGSConnectionID cid, uint64_t spid);
-extern "C" void CGSShowSpaces(CGSConnectionID cid, CFArrayRef spaces);
-extern "C" void CGSHideSpaces(CGSConnectionID cid, CFArrayRef spaces);
-
 #define BUF_SIZE 256
 #define kCGSOnAllWorkspacesTagBit (1 << 11)
 #define kCGSNoShadowTagBit (1 << 3)
-extern "C" CGError CGSSetWindowShadowParameters(CGSConnectionID cid, CGWindowID wid, CGFloat standardDeviation, CGFloat density, int offsetX, int offsetY);
-extern "C" CGError CGSInvalidateWindowShadow(CGSConnectionID cid, CGWindowID wid);
+
+extern "C" int CGSMainConnectionID(void);
+extern "C" CGError CGSGetConnectionPSN(int cid, ProcessSerialNumber *psn);
+
+extern "C" CGError CGSSetWindowAlpha(int cid, uint32_t wid, float alpha);
+extern "C" CGError CGSGetWindowAlpha(int cid, uint32_t wid, float *out_alpha);
+extern "C" CGError CGSSetWindowListAlpha(int cid, const uint32_t *window_list, int window_count, float alpha, float duration);
+extern "C" CGError CGSSetWindowLevel(int cid, uint32_t wid, int level);
+extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
+extern "C" CGError CGSGetWindowOwner(int cid, uint32_t wid, int *window_cid);
+extern "C" CGError CGSSetWindowShadowParameters(int cid, CGWindowID wid, CGFloat standardDeviation, CGFloat density, int offsetX, int offsetY);
+extern "C" CGError CGSInvalidateWindowShadow(int cid, CGWindowID wid);
 extern "C" CGError CGSSetWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
 extern "C" CGError CGSClearWindowTags(int cid, uint32_t wid, const int tags[2], size_t maxTagSize);
-extern "C" CGError CGSGetWindowOwner(int cid, uint32_t wid, int *window_cid);
-extern "C" CGError CGSConnectionGetPID(const int cid, pid_t *pid);
 
-static CGSConnectionID _connection;
+extern "C" void CGSManagedDisplaySetCurrentSpace(int cid, CFStringRef display_ref, uint64_t spid);
+extern "C" uint64_t CGSManagedDisplayGetCurrentSpace(int cid, CFStringRef display_ref);
+extern "C" CFArrayRef CGSCopyManagedDisplaySpaces(const int cid);
+extern "C" CFStringRef CGSCopyManagedDisplayForSpace(const int cid, uint64_t spid);
+extern "C" void CGSShowSpaces(int cid, CFArrayRef spaces);
+extern "C" void CGSHideSpaces(int cid, CFArrayRef spaces);
+
+static int _connection;
 static id dock_spaces;
 static id dp_desktop_picture_manager;
 static uint64_t add_space_fp;
@@ -625,25 +626,20 @@ static void do_window_sticky(const char *message)
     }
 }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 typedef void (*focus_window_call)(ProcessSerialNumber psn, uint32_t wid);
 static void do_window_focus(const char *message)
 {
     int window_connection;
-    pid_t window_pid;
     ProcessSerialNumber window_psn;
 
     Token wid_token = get_token(&message);
     uint32_t window_id = token_to_uint32t(wid_token);
 
     CGSGetWindowOwner(_connection, window_id, &window_connection);
-    CGSConnectionGetPID(window_connection, &window_pid);
-    GetProcessForPID(window_pid, &window_psn);
+    CGSGetConnectionPSN(window_connection, &window_psn);
 
     ((focus_window_call) set_front_window_fp)(window_psn, window_id);
 }
-#pragma clang diagnostic pop
 
 static void do_window_shadow(const char *message)
 {
