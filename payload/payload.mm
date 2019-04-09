@@ -350,6 +350,7 @@ static void init_instances()
     }
 
     managed_space = objc_getClass("Dock.ManagedSpace");
+    _connection = CGSMainConnectionID();
 }
 
 struct Token
@@ -791,8 +792,6 @@ static bool start_daemon(int port)
 + (void) load
 {
     NSLog(@"[chunkwm-sa] loaded payload");
-    _connection = CGSMainConnectionID();
-
     if (start_daemon(5050)) {
         init_instances();
         NSLog(@"[chunkwm-sa] now listening on port 5050..");
