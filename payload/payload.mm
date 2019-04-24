@@ -123,6 +123,9 @@ static uint64_t image_slide(void)
 
 static uint64_t hex_find_seq(uint64_t baddr, const char *c_pattern)
 {
+    if (!baddr)     return 0x0;
+    if (!c_pattern) return 0x0;
+
     int counter = 0;
     uint64_t addr = baddr;
     uint64_t pattern_length = (strlen(c_pattern) + 1) / 3;
