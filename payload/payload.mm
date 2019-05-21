@@ -241,6 +241,15 @@ uint64_t get_move_space_offset(NSOperatingSystemVersion os_version) {
     return 0;
 }
 
+uint64_t get_set_front_window_offset(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return 0x57500;
+        }
+    }
+    return 0;
+}
+
 const char *get_dock_spaces_pattern(NSOperatingSystemVersion os_version) {
     if (os_version.minorVersion == 14) {
         return "?? ?? ?? 00 49 8B 3C 24 48 8B 35 ?? ?? ?? 00 44 89 BD 94 FE FF FF 44 89 FA 41 FF D5 48 89 C7 E8 ?? ?? ?? 00 48 ?? 85 40 FE FF FF 48 8B 3D ?? ?? ?? 00 48 89 DE 41 FF D5 48 8B 35 ?? ?? ?? 00 31 D2 48 89 C7 41 FF D5 48 89 85 70 FE FF FF 49 8B 3C 24";
@@ -282,6 +291,15 @@ const char *get_move_space_pattern(NSOperatingSystemVersion os_version) {
             return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 81 EC A8 00 00 00 41 89 D7 48 89 75 D0 48 89 FB 4C 8D 35 03 A2 15 00 49 8B 06 4C 8B 24 07 4C 89 E7 4C 89 6D A8 4C 89 EE E8 65 CC 00 00 48 89 55 C0 48 85 C0 0F 84 89 00 00 00 48 89 5D B8 48 89 45 C8 48 8D 1D 6E 85 16 00 48 8D B5 38 FF FF FF 31 D2 31 C9 48 89 DF E8 C8 09 05 00 80 3B 01 75 1C 4C 8B 7D C8 4C 89 FF 48 8B 75 D0 4C 8B 75 C0 4D 89 F5 E8 7A F5 F0 FF E9 6E 05 00 00 48 8B 5D D0 48 85 DB 74 44 49 8B 06 4C 8B 34 03 48 89 DF E8 FB 06 05 00 4C 89 F7 48 8B 75 A8 E8 31 CD 00 00 49 89 C7 48 89 DF E8 DE 06 05 00 4D 85 FF 75 44 48 8B 7D C0 E8 8A 0A 05 00 48 8B 7D C8 E8 C7 06 05 00";
         } else {
             return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 4D 89 EC 41 89 D5 49 89 ?? ?? 89 FB 48 8B 05 ?? ?? ?? 00 4C 8B 3C 03 4C 89 ?? 4C 89 E6 E8 ?? CC 00 00 48 89 55 ?? 48 89 45 ?? 48 85 C0 0F 84 ?? ?? 00 00";
+        }
+    }
+    return NULL;
+}
+
+const char *get_set_front_window_pattern(NSOperatingSystemVersion os_version) {
+    if (os_version.minorVersion == 14) {
+        if (os_version.patchVersion >= 4) {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 58 48 8B 05 ?? C8 3E 00 48 8B 00 48 89 45 D0 85 F6 0F 84 0A 02 00 00 41 89 F5 49 89 FE 49 89 FF 49 C1 EF 20 48 8D 75 AF C6 06 00 E8 ?? 16 03 00 48 8B 3D ?? C9 3E 00 BE 01 00 00 00 E8 ?? 6C 37 00 84 C0 74 59 0F B6 5D AF";
         }
     }
     return NULL;
@@ -343,7 +361,7 @@ static void init_instances()
         move_space_fp = move_space_addr;
     }
 
-    uint64_t set_front_window_addr = hex_find_seq(baseaddr + 0x57500, "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 58 48 8B 05 15 C8 3E 00 48 8B 00 48 89 45 D0 85 F6 0F 84 0A 02 00 00 41 89 F5 49 89 FE 49 89 FF 49 C1 EF 20 48 8D 75 AF C6 06 00 E8 7D 16 03 00 48 8B 3D 56 C9 3E 00 BE 01 00 00 00 E8 B6 6C 37 00 84 C0 74 59 0F B6 5D AF");
+    uint64_t set_front_window_addr = hex_find_seq(baseaddr + get_set_front_window_offset(os_version), get_set_front_window_pattern(os_version));
     if (set_front_window_addr == 0x0) {
         NSLog(@"[chunkwm-sa] failed to get pointer to setFrontWindow function..");
         set_front_window_fp = 0;
