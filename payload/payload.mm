@@ -321,7 +321,7 @@ static void init_instances()
     }
 
     uint32_t offset = *(int32_t *)dock_spaces_addr;
-    NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, dock_spaces_addr + offset + 0x4, dock_spaces_addr - baseaddr);
+    NSLog(@"[chunkwm-sa] (0x%llx) dock.spaces found at address 0x%llX (0x%llx)", baseaddr, dock_spaces_addr + offset + 0x4, dock_spaces_addr + offset + 0x4 - baseaddr);
     dock_spaces = [(*(id *)(dock_spaces_addr + offset + 0x4)) retain];
 
     // TODO(koekeishiya): replace version specific offset with memory pattern to locate
