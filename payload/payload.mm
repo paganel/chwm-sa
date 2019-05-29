@@ -208,6 +208,10 @@ uint64_t get_dppm_offset(NSOperatingSystemVersion os_version) {
         } else {
             return 0x500ac0;
         }
+    } else if (os_version.minorVersion == 13) {
+        if (os_version.patchVersion == 6) {
+            return 0x5DBF18;
+        }
     }
     return 0;
 }
@@ -237,6 +241,10 @@ uint64_t get_move_space_offset(NSOperatingSystemVersion os_version) {
         } else {
             return 0x36f500;
         }
+    } else if (os_version.minorVersion == 13) {
+        if (os_version.patchVersion == 6) {
+            return 0x499b00;
+        }
     }
     return 0;
 }
@@ -245,6 +253,10 @@ uint64_t get_set_front_window_offset(NSOperatingSystemVersion os_version) {
     if (os_version.minorVersion == 14) {
         if (os_version.patchVersion >= 4) {
             return 0x57500;
+        }
+    } else if (os_version.minorVersion == 13) {
+        if (os_version.patchVersion == 6) {
+            return 0x59600;
         }
     }
     return 0;
@@ -292,6 +304,10 @@ const char *get_move_space_pattern(NSOperatingSystemVersion os_version) {
         } else {
             return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 4D 89 EC 41 89 D5 49 89 ?? ?? 89 FB 48 8B 05 ?? ?? ?? 00 4C 8B 3C 03 4C 89 ?? 4C 89 E6 E8 ?? CC 00 00 48 89 55 ?? 48 89 45 ?? 48 85 C0 0F 84 ?? ?? 00 00";
         }
+    } else if (os_version.minorVersion == 13) {
+        if (os_version.patchVersion == 6) {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 4D 89 EC 41 89 D5 49 89 F7 49 89 FE 48 8B 05 4C 2F 13 00 49 8B 1C 06 48 89 DF 4C 89 E6 E8 AD EB FE FF 48 89 55 C8 48 89 45 C0 48 85 C0 0F 84 84 00 00 00";
+        }
     }
     return NULL;
 }
@@ -300,6 +316,10 @@ const char *get_set_front_window_pattern(NSOperatingSystemVersion os_version) {
     if (os_version.minorVersion == 14) {
         if (os_version.patchVersion >= 4) {
             return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 58 48 8B 05 ?? C8 3E 00 48 8B 00 48 89 45 D0 85 F6 0F 84 0A 02 00 00 41 89 F5 49 89 FE 49 89 FF 49 C1 EF 20 48 8D 75 AF C6 06 00 E8 ?? 16 03 00 48 8B 3D ?? C9 3E 00 BE 01 00 00 00 E8 ?? 6C 37 00 84 C0 74 59 0F B6 5D AF";
+        }
+    } else if (os_version.minorVersion == 13) {
+        if (os_version.patchVersion == 6) {
+            return "55 48 89 E5 41 57 41 56 41 55 41 54 53 48 83 EC 48 41 89 F5 49 89 FE 48 8B 05 C6 FE 4C 00 48 8B 00 48 89 45 D0 45 85 ED 0F 84 1F 02 00 00 4D 89 F7 49 C1 EF 20 48 8D 75 CF C6 06 00 4C 89 F7 E8 07 1C 03 00 48 8B 3D 01 00 4D 00 BE 01 00 00 00 E8 D5 56 45 00 84 C0 74 6C 49 89 E4 48 89 E0 4C 8D 40 E0 4C";
         }
     }
     return NULL;
