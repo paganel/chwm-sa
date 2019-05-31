@@ -27,8 +27,6 @@ extern "C" int CGSMainConnectionID(void);
 extern "C" CGError CGSGetConnectionPSN(int cid, ProcessSerialNumber *psn);
 
 extern "C" CGError CGSSetWindowAlpha(int cid, uint32_t wid, float alpha);
-extern "C" CGError CGSGetWindowOpacity(int cid, uint32_t wid, bool *opaque);
-extern "C" CGError CGSSetWindowOpacity(int cid, uint32_t wid, bool opaque);
 extern "C" CGError CGSSetWindowListAlpha(int cid, const uint32_t *window_list, int window_count, float alpha, float duration);
 extern "C" CGError CGSSetWindowLevel(int cid, uint32_t wid, int level);
 extern "C" OSStatus CGSMoveWindow(const int cid, const uint32_t wid, CGPoint *point);
@@ -632,11 +630,6 @@ static void do_window_alpha(const char *message)
     uint32_t wid = token_to_uint32t(wid_token);
     Token alpha_token = get_token(&message);
     float alpha = token_to_float(alpha_token);
-
-    bool opaque = true;
-    CGSGetWindowOpacity(_connection, wid, &opaque);
-    if (opaque) CGSSetWindowOpacity(_connection, wid, 0);
-
     CGSSetWindowAlpha(_connection, wid, alpha);
 }
 
@@ -648,11 +641,6 @@ static void do_window_alpha_fade(const char *message)
     float alpha = token_to_float(alpha_token);
     Token duration_token = get_token(&message);
     float duration = token_to_float(duration_token);
-
-    bool opaque = true;
-    CGSGetWindowOpacity(_connection, wid, &opaque);
-    if (opaque) CGSSetWindowOpacity(_connection, wid, 0);
-
     CGSSetWindowListAlpha(_connection, &wid, 1, alpha, duration);
 }
 
