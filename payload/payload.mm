@@ -616,6 +616,8 @@ static void do_window_move(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     Token x_token = get_token(&message);
     int x = token_to_int(x_token);
     Token y_token = get_token(&message);
@@ -628,6 +630,8 @@ static void do_window_alpha(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     Token alpha_token = get_token(&message);
     float alpha = token_to_float(alpha_token);
     CGSSetWindowAlpha(_connection, wid, alpha);
@@ -637,6 +641,8 @@ static void do_window_alpha_fade(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     Token alpha_token = get_token(&message);
     float alpha = token_to_float(alpha_token);
     Token duration_token = get_token(&message);
@@ -648,6 +654,8 @@ static void do_window_level(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     Token key_token = get_token(&message);
     int key = token_to_int(key_token);
     CGSSetWindowLevel(_connection, wid, CGWindowLevelForKey(key));
@@ -657,6 +665,8 @@ static void do_window_sticky(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     Token value_token = get_token(&message);
     int value = token_to_int(value_token);
     int tags[2] = { kCGSOnAllWorkspacesTagBit, 0 };
@@ -686,6 +696,8 @@ static void do_window_shadow(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     Token value_token = get_token(&message);
     int value = token_to_int(value_token);
     int tags[2] = { kCGSNoShadowTagBit,  0};
@@ -701,6 +713,8 @@ static void do_window_shadow_irreversible(const char *message)
 {
     Token wid_token = get_token(&message);
     uint32_t wid = token_to_uint32t(wid_token);
+    if (!wid) return;
+
     CGSSetWindowShadowParameters(_connection, wid, 0, 0, 0, 0);
 }
 
