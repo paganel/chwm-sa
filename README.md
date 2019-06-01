@@ -1,5 +1,7 @@
 ## chunkwm scripting addition
 
+**ARCHIVED**: This repository was only necessary while I was learning how to deal with scripting-additions.
+
 **NOTE**: chunkwm-sa has been integrated into [chunkwm](https://github.com/koekeishiya/chunkwm).
 Check the [official docs](https://koekeishiya.github.io/chunkwm/docs/sa.html) for information about this scripting addition
 and its integration with chunkwm, as well as further instructions on how to install chunkwm-sa.
